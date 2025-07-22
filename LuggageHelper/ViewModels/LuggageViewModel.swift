@@ -13,6 +13,11 @@ class LuggageViewModel: ObservableObject {
     init() {
         loadData()
         loadPresetAirlines()
+        
+        // 如果是首次启动，添加一些示例数据
+        if luggages.isEmpty && standaloneItems.isEmpty && checklists.isEmpty {
+            addSampleData()
+        }
     }
     
     // MARK: - 行李管理
@@ -54,6 +59,14 @@ class LuggageViewModel: ObservableObject {
     func addStandaloneItem(_ item: LuggageItem) {
         standaloneItems.append(item)
         saveData()
+    }
+    
+    /// 更新独立物品信息
+    func updateStandaloneItem(_ item: LuggageItem) {
+        if let index = standaloneItems.firstIndex(where: { $0.id == item.id }) {
+            standaloneItems[index] = item
+            saveData()
+        }
     }
     
     /// 删除独立物品
@@ -185,5 +198,110 @@ class LuggageViewModel: ObservableObject {
         dataService.saveLuggages(luggages)
         dataService.saveChecklists(checklists)
         dataService.saveStandaloneItems(standaloneItems)
+    }
+    
+    // MARK: - 示例数据
+    
+    /// 添加示例数据用于测试
+    func addSampleData() {
+        // 创建示例行李
+        let sampleLuggage1 = Luggage(
+            name: "旅行箱",
+            capacity: 50.0,
+            emptyWeight: 3.5,
+            luggageType: .checked,
+            selectedAirlineId: airlines.first?.id
+        )
+        let sampleLuggage2 = Luggage(
+            name: "背包",
+            capacity: 20.0,
+            emptyWeight: 1.2,
+            luggageType: .carryOn,
+            selectedAirlineId: airlines.first?.id
+        )
+        
+        // 添加行李
+        addLuggage(sampleLuggage1)
+        addLuggage(sampleLuggage2)
+        
+        // 创建示例物品（在行李中）
+        let itemInLuggage1 = LuggageItem(
+            name: "T恤",
+            volume: 0.5,
+            weight: 0.15,
+            location: "衣物区"
+        )
+        let itemInLuggage2 = LuggageItem(
+            name: "牛仔裤",
+            volume: 1.0,
+            weight: 0.6,
+            location: "衣物区"
+        )
+        let itemInLuggage3 = LuggageItem(
+            name: "笔记本电脑",
+            volume: 2.0,
+            weight: 1.4,
+            location: "电子设备区",
+            note: "重要物品，小心轻放"
+        )
+        
+        // 将物品添加到行李中
+        addItem(itemInLuggage1, to: sampleLuggage1.id)
+        addItem(itemInLuggage2, to: sampleLuggage1.id)
+        addItem(itemInLuggage3, to: sampleLuggage2.id)
+        
+        // 创建示例独立物品
+        let standaloneItem1 = LuggageItem(
+            name: "充电器",
+            volume: 0.2,
+            weight: 0.3,
+            location: "书房桌子上",
+            note: "记得带上"
+        )
+        let standaloneItem2 = LuggageItem(
+            name: "护照",
+            volume: 0.01,
+            weight: 0.05,
+            location: "抽屉里"
+        )
+        let standaloneItem3 = LuggageItem(
+            name: "太阳镜",
+            volume: 0.1,
+            weight: 0.05,
+            location: "床头柜"
+        )
+        
+        // 添加独立物品
+        addStandaloneItem(standaloneItem1)
+        addStandaloneItem(standaloneItem2)
+        addStandaloneItem(standaloneItem3)
+        
+        // 创建示例清单
+        let sampleChecklist = TravelChecklist(
+            title: "出行准备清单",
+            items: [
+                TravelChecklistItem(name: "检查护照有效期", checked: true),
+                TravelChecklistItem(name: "预订酒店", checked: true),
+                TravelChecklistItem(name: "购买保险", checked: false),
+                TravelChecklistItem(name: "准备现金", checked: false),
+                TravelChecklistItem(name: "下载离线地图", checked: false)
+            ]
+        )
+        addChecklist(sampleChecklist)
+        
+        // 保存数据
+        saveData()
+    }
+}
+
+extension ItemStatus {
+    var isStandalone: Bool {
+        if case .standalone = self { return true }
+        return false
+    }
+    
+    var luggage: Luggage? {
+        if case .inLuggage(let luggage, _) = self { return luggage }
+        return nil
     }
 }

@@ -90,7 +90,7 @@ struct AddStandaloneItemView: View {
     private var searchResultsSection: some View {
         Section(header: Text("搜索结果")) {
             ForEach(searchResults.indices, id: \.self) { index in
-                SearchResultRow(result: searchResults[index]) { result in
+                AddStandaloneItemSearchResultRow(result: searchResults[index]) { result in
                     applySearchResult(result)
                 }
             }
@@ -193,7 +193,39 @@ struct AddStandaloneItemView: View {
     }
 }
 
-
+/// 搜索结果行组件
+struct AddStandaloneItemSearchResultRow: View {
+    let result: ItemSearchService.ItemSearchResult
+    let onSelect: (ItemSearchService.ItemSearchResult) -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(result.name)
+                .font(.headline)
+            
+            HStack {
+                if let weight = result.weight {
+                    Text("重量: \(weight, specifier: "%.2f")kg")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                if let volume = result.volume {
+                    Text("体积: \(volume, specifier: "%.2f")L")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            Text("来源: \(result.source) | 置信度: \(Int(result.confidence * 100))%")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onSelect(result)
+        }
+    }
+}
 
 #if DEBUG
 struct AddStandaloneItemView_Previews: PreviewProvider {

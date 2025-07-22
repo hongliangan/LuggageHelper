@@ -1,22 +1,40 @@
 import SwiftUI
 
-/// 添加新物品页面
-/// 用户可输入物品名称、体积、重量、放置位置、备注和图片
-struct AddItemView: View {
-    let luggage: Luggage
+/// 编辑现有物品页面
+/// 用户可修改物品名称、体积、重量、放置位置、备注和图片
+struct EditItemView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var viewModel: LuggageViewModel
-    // 物品属性
-    @State private var name = ""
-    @State private var volume = ""
-    @State private var weight = ""
-    @State private var location = ""
-    @State private var note = ""
-    @State private var selectedImage: UIImage? = nil
+    
+    @State private var name: String
+    @State private var volume: String
+    @State private var weight: String
+    @State private var location: String
+    @State private var note: String
+    @State private var selectedImage: UIImage?
     @State private var showImagePicker = false
     @State private var isSearching = false
     @State private var searchResults: [ItemSearchService.ItemSearchResult] = []
     @StateObject private var searchService = ItemSearchService()
+    
+    let item: LuggageItem // 接收要编辑的物品对象
+    let luggageId: UUID? // 如果物品在行李中，则传入行李ID
+    
+    init(item: LuggageItem, luggageId: UUID?) {
+        self.item = item
+        self.luggageId = luggageId
+        _name = State(initialValue: item.name)
+        _volume = State(initialValue: String(item.volume))
+        _weight = State(initialValue: String(item.weight))
+        _location = State(initialValue: item.location ?? "")
+        _note = State(initialValue: item.note ?? "")
+        
+        // 异步加载图片
+        _selectedImage = State(initialValue: nil)
+        if let imagePath = item.imagePath {
+            _selectedImage = State(initialValue: loadImageFromDocuments(imagePath: imagePath))
+        }
+    }
     
     var body: some View {
         NavigationStack {
@@ -76,13 +94,13 @@ struct AddItemView: View {
                     }
                 }
             }
-            .navigationTitle("添加物品")
+            .navigationTitle("编辑物品")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { saveItem() }
+                    Button("保存") { updateItem() }
                     .disabled(!canSave)
                 }
             }
@@ -91,19 +109,27 @@ struct AddItemView: View {
             }
         }
     }
+    
     /// 判断是否可以保存物品
     private var canSave: Bool {
         !name.isEmpty && !volume.isEmpty && !weight.isEmpty
     }
-    /// 保存新物品到数据模型
-    private func saveItem() {
+    
+    /// 更新物品到数据模型
+    private func updateItem() {
         guard let volumeValue = Double(volume),
               let weightValue = Double(weight) else { return }
-        var imagePath: String? = nil
-        if let selectedImage = selectedImage {
+        
+        var imagePath: String? = item.imagePath // 默认使用现有图片路径
+        if let selectedImage {
             imagePath = saveImageToDocuments(image: selectedImage)
+        } else if item.imagePath != nil && selectedImage == nil { // 如果之前有图片但现在移除了
+            deleteImageFromDocuments(imagePath: item.imagePath!)
+            imagePath = nil
         }
-        let newItem = LuggageItem(
+        
+        let updatedItem = LuggageItem(
+            id: item.id,
             name: name,
             volume: volumeValue,
             weight: weightValue,
@@ -111,10 +137,15 @@ struct AddItemView: View {
             location: location.isEmpty ? nil : location,
             note: note.isEmpty ? nil : note
         )
-        // 将物品添加到指定的行李中
-        viewModel.addItem(newItem, to: luggage.id)
+        
+        if let luggageId = luggageId {
+            viewModel.updateItem(updatedItem, in: luggageId)
+        } else {
+            viewModel.updateStandaloneItem(updatedItem)
+        }
         dismiss()
     }
+    
     /// 搜索物品信息
     private func searchItemInfo() {
         guard !name.isEmpty else { return }
@@ -165,43 +196,17 @@ struct AddItemView: View {
         try? data.write(to: url)
         return url.path
     }
-}
-
-/// 搜索结果行视图
-struct AddItemSearchResultRow: View {
-    let result: ItemSearchService.ItemSearchResult
-    let onUse: (ItemSearchService.ItemSearchResult) -> Void
     
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(result.name)
-                    .font(.headline)
-                Spacer()
-                Button("使用") {
-                    onUse(result)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-            
-            HStack {
-                if let weight = result.weight {
-                    Text("重量: \(String(format: "%.2f", weight))kg")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                if let volume = result.volume {
-                    Text("体积: \(String(format: "%.2f", volume))L")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            Text("来源: \(result.source) | 置信度: \(Int(result.confidence * 100))%")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-        }
-        .padding(.vertical, 2)
+    /// 从沙盒加载图片
+    private func loadImageFromDocuments(imagePath: String) -> UIImage? {
+        let url = URL(fileURLWithPath: imagePath)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return UIImage(data: data)
+    }
+    
+    /// 从沙盒删除图片
+    private func deleteImageFromDocuments(imagePath: String) {
+        let url = URL(fileURLWithPath: imagePath)
+        try? FileManager.default.removeItem(at: url)
     }
 }

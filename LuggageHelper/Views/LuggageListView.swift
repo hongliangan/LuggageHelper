@@ -5,6 +5,7 @@ import SwiftUI
 struct LuggageListView: View {
     @EnvironmentObject var viewModel: LuggageViewModel
     @State private var showingAddLuggage = false
+    @State private var luggageToEdit: Luggage?
     
     var body: some View {
         NavigationStack {
@@ -15,8 +16,21 @@ struct LuggageListView: View {
                     } label: {
                         LuggageRowView(luggage: luggage)
                     }
+                    .swipeActions {
+                        Button(role: .destructive) {
+                            viewModel.removeLuggage(luggage)
+                        } label: {
+                            Label("删除", systemImage: "trash")
+                        }
+                        
+                        Button {
+                            luggageToEdit = luggage
+                        } label: {
+                            Label("编辑", systemImage: "pencil")
+                        }
+                        .tint(.blue)
+                    }
                 }
-                .onDelete(perform: deleteLuggage)
             }
             .navigationTitle("我的行李")
             .toolbar {
@@ -31,14 +45,9 @@ struct LuggageListView: View {
             .sheet(isPresented: $showingAddLuggage) {
                 AddLuggageView()
             }
-        }
-    }
-    
-    /// 删除指定索引的行李
-    /// - Parameter offsets: 要删除的行李索引集合
-    private func deleteLuggage(offsets: IndexSet) {
-        for index in offsets {
-            viewModel.removeLuggage(viewModel.luggages[index])
+            .sheet(item: $luggageToEdit) { luggage in
+                EditLuggageView(luggage: luggage)
+            }
         }
     }
 }
