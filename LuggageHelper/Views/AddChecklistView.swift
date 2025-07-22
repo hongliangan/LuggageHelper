@@ -13,6 +13,7 @@ struct AddChecklistView: View {
             Form {
                 Section(header: Text("清单标题")) {
                     TextField("请输入清单标题", text: $title)
+                        .textFieldStyle(.roundedBorder)
                 }
                 Section(header: Text("清单项目")) {
                     ForEach(items.indices, id: \ .self) { idx in
@@ -20,6 +21,7 @@ struct AddChecklistView: View {
                             get: { items[idx] },
                             set: { items[idx] = $0 }
                         ))
+                        .textFieldStyle(.roundedBorder)
                     }
                     Button("添加项目") {
                         items.append("")

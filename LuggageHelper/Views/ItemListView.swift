@@ -3,7 +3,7 @@ import SwiftUI
 /// 物品总览页面
 /// 展示所有物品，支持按行李筛选和搜索
 struct ItemListView: View {
-    @ObservedObject var viewModel: LuggageViewModel
+    @EnvironmentObject var viewModel: LuggageViewModel
     @State private var searchText = ""
     @State private var selectedFilter: ItemFilter = .all
     

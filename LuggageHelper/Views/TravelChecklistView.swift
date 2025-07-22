@@ -3,7 +3,7 @@ import SwiftUI
 /// 出行清单页面
 /// 管理出行准备清单，支持勾选已完成项目
 struct TravelChecklistView: View {
-    @ObservedObject var viewModel: LuggageViewModel
+    @EnvironmentObject var viewModel: LuggageViewModel
     @State private var showingAddChecklist = false
     @State private var selectedChecklist: TravelChecklist?
     

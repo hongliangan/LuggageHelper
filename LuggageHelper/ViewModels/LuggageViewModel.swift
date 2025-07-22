@@ -5,11 +5,13 @@ import SwiftUI
 class LuggageViewModel: ObservableObject {
     @Published var luggages: [Luggage] = []
     @Published var checklists: [TravelChecklist] = []
+    @Published var airlines: [Airline] = []
     
     private let dataService = LuggageDataService()
     
     init() {
         loadData()
+        loadPresetAirlines()
     }
     
     // MARK: - 行李管理
@@ -105,6 +107,31 @@ class LuggageViewModel: ObservableObject {
     }
     
     // MARK: - 数据持久化
+    
+    // MARK: - 航空公司管理
+    
+    /// 加载预设航空公司数据
+    private func loadPresetAirlines() {
+        airlines = Airline.presetAirlines
+    }
+    
+    /// 根据ID获取航空公司
+    func airline(by id: UUID) -> Airline? {
+        return airlines.first { $0.id == id }
+    }
+    
+    /// 获取行李的超重警告信息
+    func getOverweightWarning(for luggage: Luggage) -> String? {
+        guard let airlineId = luggage.selectedAirlineId,
+              let airline = airline(by: airlineId),
+              luggage.isOverweight(airline: airline) else {
+            return nil
+        }
+        
+        let weightLimit = luggage.getWeightLimit(airline: airline) ?? 0
+        let overweight = luggage.totalWeight - weightLimit
+        return "超重 \(String(format: "%.1f", overweight))kg，限重 \(String(format: "%.1f", weightLimit))kg"
+    }
     
     private func loadData() {
         luggages = dataService.loadLuggages()

@@ -15,26 +15,34 @@ struct ContentView: View {
     var body: some View {
         TabView {
             // 行李管理
-            LuggageListView(viewModel: viewModel)
+            LuggageListView()
                 .tabItem {
                     Image(systemName: "suitcase")
                     Text("行李")
                 }
             
             // 物品管理
-            ItemListView(viewModel: viewModel)
+            ItemListView()
                 .tabItem {
                     Image(systemName: "list.bullet")
                     Text("物品")
                 }
             
             // 出行清单
-            TravelChecklistView(viewModel: viewModel)
+            TravelChecklistView()
                 .tabItem {
                     Image(systemName: "checklist")
                     Text("清单")
                 }
+            
+            // 统计概览
+            StatisticsView()
+                .tabItem {
+                    Image(systemName: "chart.bar")
+                    Text("统计")
+                }
         }
+        .environmentObject(viewModel)
     }
 }
 

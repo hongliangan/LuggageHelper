@@ -3,7 +3,7 @@ import SwiftUI
 /// 行李列表主页面
 /// 展示所有已创建的行李箱/包，支持新增、编辑、删除操作
 struct LuggageListView: View {
-    @ObservedObject var viewModel: LuggageViewModel
+    @EnvironmentObject var viewModel: LuggageViewModel
     @State private var showingAddLuggage = false
     
     var body: some View {
@@ -11,7 +11,7 @@ struct LuggageListView: View {
             List {
                 ForEach(viewModel.luggages) { luggage in
                     NavigationLink {
-                        LuggageDetailView(luggage: luggage, viewModel: viewModel)
+                        LuggageDetailView(luggage: luggage)
                     } label: {
                         LuggageRowView(luggage: luggage)
                     }
@@ -29,7 +29,7 @@ struct LuggageListView: View {
                 }
             }
             .sheet(isPresented: $showingAddLuggage) {
-                AddLuggageView(viewModel: viewModel)
+                AddLuggageView()
             }
         }
     }

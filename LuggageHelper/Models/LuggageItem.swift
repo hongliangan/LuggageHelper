@@ -1,7 +1,7 @@
 import Foundation
 
 /// 物品的数据模型
-struct LuggageItem: Identifiable, Codable {
+struct LuggageItem: Identifiable, Codable, Equatable {
     let id: UUID
     var name: String
     var volume: Double

@@ -1,7 +1,7 @@
 import Foundation
 
 /// 出行清单项数据模型
-struct TravelChecklistItem: Identifiable, Codable {
+struct TravelChecklistItem: Identifiable, Codable, Equatable {
     let id: UUID
     var name: String
     var checked: Bool
@@ -16,7 +16,7 @@ struct TravelChecklistItem: Identifiable, Codable {
 }
 
 /// 出行清单数据模型
-struct TravelChecklist: Identifiable, Codable {
+struct TravelChecklist: Identifiable, Codable, Equatable {
     let id: UUID
     var title: String
     var items: [TravelChecklistItem]
