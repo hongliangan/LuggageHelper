@@ -7,6 +7,7 @@ struct AddChecklistView: View {
     @ObservedObject var viewModel: LuggageViewModel
     @State private var title: String = ""
     @State private var items: [String] = [""]
+    @State private var showingSelectItems = false // 控制选择物品视图的显示
     
     var body: some View {
         NavigationStack {
@@ -16,7 +17,7 @@ struct AddChecklistView: View {
                         .textFieldStyle(.roundedBorder)
                 }
                 Section(header: Text("清单项目")) {
-                    ForEach(items.indices, id: \ .self) { idx in
+                    ForEach(items.indices, id: \.self) { idx in
                         TextField("项目", text: Binding(
                             get: { items[idx] },
                             set: { items[idx] = $0 }
@@ -25,6 +26,10 @@ struct AddChecklistView: View {
                     }
                     Button("添加项目") {
                         items.append("")
+                    }
+                    
+                    Button("添加物品") {
+                        showingSelectItems = true
                     }
                 }
             }
@@ -37,6 +42,14 @@ struct AddChecklistView: View {
                     Button("保存") { saveChecklist() }
                         .disabled(title.isEmpty || items.allSatisfy { $0.isEmpty })
                 }
+            }
+            .sheet(isPresented: $showingSelectItems) {
+                SelectItemsForChecklistView(onItemsSelected: {
+                    selectedNames in
+                    for name in selectedNames {
+                        items.append(name)
+                    }
+                })
             }
         }
     }

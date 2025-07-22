@@ -5,7 +5,7 @@ import SwiftUI
 struct TravelChecklistView: View {
     @EnvironmentObject var viewModel: LuggageViewModel
     @State private var showingAddChecklist = false
-    @State private var selectedChecklist: TravelChecklist?
+    @State private var checklistToEdit: TravelChecklist? // 声明 checklistToEdit 变量
     
     var body: some View {
         NavigationStack {
@@ -16,8 +16,21 @@ struct TravelChecklistView: View {
                     } label: {
                         ChecklistRowView(checklist: checklist)
                     }
+                    .swipeActions {
+                        Button(role: .destructive) {
+                            viewModel.removeChecklist(checklist)
+                        } label: {
+                            Label("删除", systemImage: "trash")
+                        }
+                        
+                        Button {
+                            checklistToEdit = checklist
+                        } label: {
+                            Label("编辑", systemImage: "pencil")
+                        }
+                        .tint(.blue)
+                    }
                 }
-                .onDelete(perform: deleteChecklist)
             }
             .navigationTitle("出行清单")
             .toolbar {
@@ -32,13 +45,9 @@ struct TravelChecklistView: View {
             .sheet(isPresented: $showingAddChecklist) {
                 AddChecklistView(viewModel: viewModel)
             }
-        }
-    }
-    
-    /// 删除指定索引的清单
-    private func deleteChecklist(offsets: IndexSet) {
-        for index in offsets {
-            viewModel.removeChecklist(viewModel.checklists[index])
+            .sheet(item: $checklistToEdit) { checklist in
+                EditChecklistView(checklist: checklist, viewModel: viewModel)
+            }
         }
     }
 }
@@ -53,7 +62,7 @@ struct ChecklistRowView: View {
                 .font(.headline)
             Text("共 \(checklist.items.count) 项，已完成 \(checklist.completedCount) 项")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(checklist.isAllChecked ? .green : .red)
             
             ProgressView(value: checklist.progress)
                 .progressViewStyle(LinearProgressViewStyle())

@@ -29,7 +29,7 @@ struct LuggageDetailView: View {
             }
         }
         .sheet(isPresented: $showingAddItem) {
-            AddItemView(luggage: luggage)
+            SelectExistingItemsView(luggageId: luggage.id)
         }
     }
     
