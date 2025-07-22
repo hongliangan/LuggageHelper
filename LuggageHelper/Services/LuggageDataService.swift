@@ -16,6 +16,11 @@ class LuggageDataService {
             .appendingPathComponent("checklists.json")
     }
     
+    private var standaloneItemsFileURL: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("standaloneItems.json")
+    }
+    
     // MARK: - 行李数据
     
     /// 保存行李数据到本地
@@ -58,6 +63,29 @@ class LuggageDataService {
             return try JSONDecoder().decode([TravelChecklist].self, from: data)
         } catch {
             print("加载清单数据失败: \(error)")
+            return []
+        }
+    }
+    
+    // MARK: - 独立物品数据
+    
+    /// 保存独立物品数据到本地
+    func saveStandaloneItems(_ items: [LuggageItem]) {
+        do {
+            let data = try JSONEncoder().encode(items)
+            try data.write(to: standaloneItemsFileURL)
+        } catch {
+            print("保存独立物品数据失败: \(error)")
+        }
+    }
+    
+    /// 从本地加载独立物品数据
+    func loadStandaloneItems() -> [LuggageItem] {
+        do {
+            let data = try Data(contentsOf: standaloneItemsFileURL)
+            return try JSONDecoder().decode([LuggageItem].self, from: data)
+        } catch {
+            print("加载独立物品数据失败: \(error)")
             return []
         }
     }

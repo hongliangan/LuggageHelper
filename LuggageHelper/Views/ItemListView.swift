@@ -6,12 +6,12 @@ struct ItemListView: View {
     @EnvironmentObject var viewModel: LuggageViewModel
     @State private var searchText = ""
     @State private var selectedFilter: ItemFilter = .all
+    @State private var showingAddItem = false
     
     enum ItemFilter: String, CaseIterable {
         case all = "全部"
-        case packed = "已装箱"
-        case unpacked = "未装箱"
-        case home = "家中"
+        case inLuggage = "已装入行李"
+        case standalone = "独立存放"
     }
     
     /// 获取过滤后的物品列表
@@ -27,15 +27,16 @@ struct ItemListView: View {
         switch selectedFilter {
         case .all:
             break
-        case .packed:
-            items = items.filter { 
-                guard let location = $0.location else { return false }
-                return location != "未装箱" && location != "家中"
+        case .inLuggage:
+            items = items.filter { item in
+                let status = viewModel.getItemStatus(for: item)
+                return status.isInLuggage
             }
-        case .unpacked:
-            items = items.filter { $0.location == "未装箱" }
-        case .home:
-            items = items.filter { $0.location == "家中" }
+        case .standalone:
+            items = items.filter { item in
+                let status = viewModel.getItemStatus(for: item)
+                return !status.isInLuggage
+            }
         }
         
         return items
@@ -51,6 +52,14 @@ struct ItemListView: View {
             .navigationTitle("物品管理")
             .searchable(text: $searchText)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        showingAddItem = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu("筛选") {
                         Picker("筛选", selection: $selectedFilter) {
@@ -60,6 +69,9 @@ struct ItemListView: View {
                         }
                     }
                 }
+            }
+            .sheet(isPresented: $showingAddItem) {
+                AddStandaloneItemView()
             }
         }
     }

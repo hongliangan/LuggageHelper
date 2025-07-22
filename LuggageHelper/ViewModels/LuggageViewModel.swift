@@ -6,6 +6,7 @@ class LuggageViewModel: ObservableObject {
     @Published var luggages: [Luggage] = []
     @Published var checklists: [TravelChecklist] = []
     @Published var airlines: [Airline] = []
+    @Published var standaloneItems: [LuggageItem] = [] // 独立物品列表
     
     private let dataService = LuggageDataService()
     
@@ -43,9 +44,50 @@ class LuggageViewModel: ObservableObject {
     
     // MARK: - 物品管理
     
-    /// 获取所有物品
+    /// 获取所有物品（包括独立物品和行李中的物品）
     var allItems: [LuggageItem] {
-        luggages.flatMap { $0.items }
+        let luggageItems = luggages.flatMap { $0.items }
+        return standaloneItems + luggageItems
+    }
+    
+    /// 添加独立物品
+    func addStandaloneItem(_ item: LuggageItem) {
+        standaloneItems.append(item)
+        saveData()
+    }
+    
+    /// 删除独立物品
+    func removeStandaloneItem(_ item: LuggageItem) {
+        standaloneItems.removeAll { $0.id == item.id }
+        saveData()
+    }
+    
+    /// 获取物品状态
+    func getItemStatus(for item: LuggageItem) -> ItemStatus {
+        // 检查物品是否在某个行李中
+        for luggage in luggages {
+            if luggage.items.contains(where: { $0.id == item.id }) {
+                return .inLuggage(luggage: luggage, userLocation: item.location)
+            }
+        }
+        // 如果不在行李中，则为独立物品
+        return .standalone(location: item.location)
+    }
+    
+    /// 将独立物品移动到行李中
+    func moveItemToLuggage(_ item: LuggageItem, to luggageId: UUID) {
+        // 从独立物品列表中移除
+        removeStandaloneItem(item)
+        // 添加到指定行李中
+        addItem(item, to: luggageId)
+    }
+    
+    /// 将物品从行李中移出，变为独立物品
+    func moveItemFromLuggage(_ item: LuggageItem, from luggageId: UUID) {
+        // 从行李中移除
+        removeItem(item.id, from: luggageId)
+        // 添加到独立物品列表
+        addStandaloneItem(item)
     }
     
     // 在 LuggageViewModel 类中添加以下方法
@@ -136,10 +178,12 @@ class LuggageViewModel: ObservableObject {
     private func loadData() {
         luggages = dataService.loadLuggages()
         checklists = dataService.loadChecklists()
+        standaloneItems = dataService.loadStandaloneItems()
     }
     
     private func saveData() {
         dataService.saveLuggages(luggages)
         dataService.saveChecklists(checklists)
+        dataService.saveStandaloneItems(standaloneItems)
     }
 }
