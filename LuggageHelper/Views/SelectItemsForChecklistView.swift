@@ -31,7 +31,7 @@ struct SelectItemsForChecklistView: View {
                 }
             }
             .navigationTitle("选择物品")
-            .toolbar {
+            .toolbar(content: {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
                 }
@@ -41,7 +41,7 @@ struct SelectItemsForChecklistView: View {
                     }
                     .disabled(selectedItemIds.isEmpty)
                 }
-            }
+            })
         }
     }
     

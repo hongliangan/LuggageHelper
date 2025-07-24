@@ -33,7 +33,7 @@ struct LuggageListView: View {
                 }
             }
             .navigationTitle("我的行李")
-            .toolbar {
+            .toolbar(content: {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showingAddLuggage = true
@@ -41,7 +41,7 @@ struct LuggageListView: View {
                         Image(systemName: "plus")
                     }
                 }
-            }
+            })
             .sheet(isPresented: $showingAddLuggage) {
                 AddLuggageView()
             }

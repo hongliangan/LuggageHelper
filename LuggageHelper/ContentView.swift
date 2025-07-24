@@ -41,6 +41,15 @@ struct ContentView: View {
                     Image(systemName: "chart.bar")
                     Text("统计")
                 }
+            
+            // 设置
+            NavigationView {
+                APIConfigurationView()
+            }
+            .tabItem {
+                Image(systemName: "gear")
+                Text("设置")
+            }
         }
         .environmentObject(viewModel)
     }

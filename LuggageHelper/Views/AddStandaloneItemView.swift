@@ -18,6 +18,11 @@ struct AddStandaloneItemView: View {
     @State private var searchResults: [ItemSearchService.ItemSearchResult] = []
     @StateObject private var searchService = ItemSearchService()
     
+    // AI 相关
+    @State private var showAIIdentification = false
+    @State private var showBatchIdentification = false
+    @State private var category: ItemCategory = .other
+    
     var body: some View {
         NavigationStack {
             Form {
@@ -31,11 +36,16 @@ struct AddStandaloneItemView: View {
                     searchResultsSection
                 }
                 
+                aiIdentificationSection
+                
+                categorySection
+                
                 noteSection
+                
                 imageSection
             }
             .navigationTitle("添加物品")
-            .toolbar {
+            .toolbar(content: {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
                 }
@@ -43,9 +53,36 @@ struct AddStandaloneItemView: View {
                     Button("保存") { saveItem() }
                         .disabled(!canSave)
                 }
-            }
+            })
             .sheet(isPresented: $showImagePicker) {
                 ImagePicker(image: $selectedImage)
+            }
+            .sheet(isPresented: $showAIIdentification) {
+                NavigationStack {
+                    AIItemIdentificationView { itemInfo in
+                        applyAIResult(itemInfo)
+                        showAIIdentification = false
+                    }
+                    .padding()
+                    .navigationTitle("AI 物品识别")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar(content: {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") {
+                                showAIIdentification = false
+                            }
+                        }
+                    })
+                }
+            }
+            .sheet(isPresented: $showBatchIdentification) {
+                AIItemBatchIdentificationView { items in
+                    if let firstItem = items.first {
+                        applyAIResult(firstItem)
+                    }
+                    // 这里可以添加批量添加物品的逻辑
+                    // 目前只使用第一个识别结果
+                }
             }
         }
     }
@@ -94,6 +131,82 @@ struct AddStandaloneItemView: View {
                     applySearchResult(result)
                 }
             }
+        }
+    }
+    
+    private var aiIdentificationSection: some View {
+        Section {
+            AIIdentificationButtonGroup(
+                onNameIdentification: {
+                    showAIIdentification = true
+                },
+                onPhotoIdentification: {
+                    showAdvancedPhotoIdentification()
+                },
+                onBatchIdentification: {
+                    showBatchIdentification = true
+                },
+                onAdvancedIdentification: {
+                    showQuickIdentification()
+                }
+            )
+        } header: {
+            Text("AI 识别")
+        } footer: {
+            Text("AI 可以通过物品名称或照片自动识别物品的重量、体积和类别")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+    
+    /// 显示高级照片识别视图
+    private func showAdvancedPhotoIdentification() {
+        let photoIdentificationView = UIHostingController(
+            rootView: AIPhotoIdentificationView { itemInfo in
+                applyAIResult(itemInfo)
+            }
+        )
+        
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootViewController = windowScene.windows.first?.rootViewController {
+            if let presentedViewController = rootViewController.presentedViewController {
+                presentedViewController.present(photoIdentificationView, animated: true)
+            } else {
+                rootViewController.present(photoIdentificationView, animated: true)
+            }
+        }
+    }
+    
+    /// 显示快速识别弹窗
+    private func showQuickIdentification() {
+        let quickIdentificationView = UIHostingController(
+            rootView: AIQuickIdentificationView { itemInfo in
+                applyAIResult(itemInfo)
+            }
+        )
+        
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootViewController = windowScene.windows.first?.rootViewController {
+            if let presentedViewController = rootViewController.presentedViewController {
+                presentedViewController.present(quickIdentificationView, animated: true)
+            } else {
+                rootViewController.present(quickIdentificationView, animated: true)
+            }
+        }
+    }
+    
+    private var categorySection: some View {
+        Section(header: Text("类别")) {
+            Picker("物品类别", selection: $category) {
+                ForEach(ItemCategory.allCases, id: \.self) { category in
+                    HStack {
+                        Text(category.icon)
+                        Text(category.displayName)
+                    }
+                    .tag(category)
+                }
+            }
+            .pickerStyle(.navigationLink)
         }
     }
     
@@ -157,6 +270,14 @@ struct AddStandaloneItemView: View {
         searchResults = []
     }
     
+    /// 应用 AI 识别结果
+    private func applyAIResult(_ itemInfo: ItemInfo) {
+        self.name = itemInfo.name
+        self.weight = String(format: "%.2f", itemInfo.weight / 1000) // 转换为 kg
+        self.volume = String(format: "%.2f", itemInfo.volume / 1000) // 转换为 L
+        self.category = itemInfo.category
+    }
+    
     /// 保存新物品到数据模型
     private func saveItem() {
         guard let volumeValue = Double(volume),
@@ -171,6 +292,7 @@ struct AddStandaloneItemView: View {
             name: name,
             volume: volumeValue,
             weight: weightValue,
+            category: category,
             imagePath: imagePath,
             location: location.isEmpty ? nil : location,
             note: note.isEmpty ? nil : note

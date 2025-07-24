@@ -1,7 +1,8 @@
 import Foundation
+import UIKit
 
 /// 箱子/包的数据模型
-struct Luggage: Identifiable, Codable, Equatable {
+struct Luggage: Identifiable, Codable, Equatable, LuggageProtocol {
     let id: UUID
     var name: String
     var capacity: Double

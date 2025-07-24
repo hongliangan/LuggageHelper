@@ -25,7 +25,7 @@ struct AddLuggageView: View {
                 imageSection
             }
             .navigationTitle("添加行李")
-            .toolbar {
+            .toolbar(content: {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
                 }
@@ -35,7 +35,7 @@ struct AddLuggageView: View {
                     }
                     .disabled(!canSave)
                 }
-            }
+            })
             .sheet(isPresented: $showImagePicker) {
                 ImagePicker(image: $selectedImage)
             }

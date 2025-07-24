@@ -37,7 +37,7 @@ struct SelectExistingItemsView: View {
                 }
             }
             .navigationTitle("选择物品")
-            .toolbar {
+            .toolbar(content: {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
                 }
@@ -47,7 +47,7 @@ struct SelectExistingItemsView: View {
                     }
                     .disabled(selectedItems.isEmpty)
                 }
-            }
+            })
         }
     }
     

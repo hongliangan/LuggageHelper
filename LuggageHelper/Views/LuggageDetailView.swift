@@ -19,7 +19,7 @@ struct LuggageDetailView: View {
             .padding()
         }
         .navigationTitle(luggage.name)
-        .toolbar {
+        .toolbar(content: {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
                     showingAddItem = true
@@ -27,7 +27,7 @@ struct LuggageDetailView: View {
                     Image(systemName: "plus")
                 }
             }
-        }
+        })
         .sheet(isPresented: $showingAddItem) {
             SelectExistingItemsView(luggageId: luggage.id)
         }

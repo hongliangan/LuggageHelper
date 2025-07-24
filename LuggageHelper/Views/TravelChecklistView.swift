@@ -33,15 +33,27 @@ struct TravelChecklistView: View {
                 }
             }
             .navigationTitle("出行清单")
-            .toolbar {
+            .toolbar(content: {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showingAddChecklist = true
+                    Menu {
+                        Button {
+                            showingAddChecklist = true
+                        } label: {
+                            Label("添加清单", systemImage: "plus")
+                        }
+                        
+                        NavigationLink(destination: AITravelPlannerView()) {
+                            Label("AI 旅行规划", systemImage: "wand.and.stars")
+                        }
+                        
+                        NavigationLink(destination: PersonalizedTravelPlannerView()) {
+                            Label("个性化旅行规划", systemImage: "person.fill.viewfinder")
+                        }
                     } label: {
                         Image(systemName: "plus")
                     }
                 }
-            }
+            })
             .sheet(isPresented: $showingAddChecklist) {
                 AddChecklistView(viewModel: viewModel)
             }

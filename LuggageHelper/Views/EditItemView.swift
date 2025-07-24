@@ -95,7 +95,7 @@ struct EditItemView: View {
                 }
             }
             .navigationTitle("编辑物品")
-            .toolbar {
+            .toolbar(content: {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
                 }
@@ -103,7 +103,7 @@ struct EditItemView: View {
                     Button("保存") { updateItem() }
                     .disabled(!canSave)
                 }
-            }
+            })
             .sheet(isPresented: $showImagePicker) {
                 ImagePicker(image: $selectedImage)
             }

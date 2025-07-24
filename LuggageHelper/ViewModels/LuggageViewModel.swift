@@ -292,6 +292,31 @@ class LuggageViewModel: ObservableObject {
         // 保存数据
         saveData()
     }
+    
+    // MARK: - 旅行建议转换功能
+    
+    /// 将旅行建议转换为出行清单
+    /// - Parameter suggestion: AI生成的旅行建议
+    /// - Returns: 转换后的出行清单
+    func createChecklistFromSuggestion(_ suggestion: TravelSuggestion) -> TravelChecklist {
+        let checklistItems = suggestion.suggestedItems.map { suggestedItem in
+            TravelChecklistItem(
+                name: "\(suggestedItem.name) (\(suggestedItem.quantity)件)",
+                checked: false,
+                note: suggestedItem.reason
+            )
+        }
+        
+        let title = "\(suggestion.destination) \(suggestion.duration)天\(suggestion.season)旅行清单"
+        return TravelChecklist(title: title, items: checklistItems)
+    }
+    
+    /// 添加AI建议生成的清单
+    /// - Parameter suggestion: AI生成的旅行建议
+    func addChecklistFromSuggestion(_ suggestion: TravelSuggestion) {
+        let checklist = createChecklistFromSuggestion(suggestion)
+        addChecklist(checklist)
+    }
 }
 
 extension ItemStatus {

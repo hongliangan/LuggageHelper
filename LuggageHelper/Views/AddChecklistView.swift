@@ -34,7 +34,7 @@ struct AddChecklistView: View {
                 }
             }
             .navigationTitle("新建清单")
-            .toolbar {
+            .toolbar(content: {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
                 }
@@ -42,7 +42,7 @@ struct AddChecklistView: View {
                     Button("保存") { saveChecklist() }
                         .disabled(title.isEmpty || items.allSatisfy { $0.isEmpty })
                 }
-            }
+            })
             .sheet(isPresented: $showingSelectItems) {
                 SelectItemsForChecklistView(onItemsSelected: {
                     selectedNames in
