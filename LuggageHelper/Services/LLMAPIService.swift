@@ -2,6 +2,9 @@ import Foundation
 import Combine
 import os.log
 
+// 确保导入配置管理器
+// LLMConfigurationManager 应该在同一个模块中，不需要额外导入
+
 /// LLM API服务
 /// 提供与各种LLM API的完整交互功能，支持OpenAI和Anthropic格式
 final class LLMAPIService: ObservableObject {
@@ -145,6 +148,20 @@ final class LLMAPIService: ObservableObject {
         /// 获取完整的API端点URL
         var fullEndpointURL: String {
             let cleanBaseURL = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            
+            // 检查baseURL是否已经包含了端点路径
+            if cleanBaseURL.hasSuffix("/v1") || cleanBaseURL.contains("/v1/chat/completions") {
+                // 如果baseURL已经包含完整路径，直接返回
+                if cleanBaseURL.contains("/chat/completions") {
+                    return cleanBaseURL
+                }
+                // 如果只包含/v1，则只添加/chat/completions
+                else if cleanBaseURL.hasSuffix("/v1") {
+                    return cleanBaseURL + "/chat/completions"
+                }
+            }
+            
+            // 默认情况：添加完整的端点路径
             return cleanBaseURL + providerType.defaultEndpoint
         }
     }
@@ -754,10 +771,20 @@ extension LLMAPIService {
     /// - Returns: 当前有效的配置
     func ensureConfigurationSync() -> LLMServiceConfig {
         let managerConfig = LLMConfigurationManager.shared.currentConfig
+        
+        print("🔍 ensureConfigurationSync 调试信息:")
+        print("   - LLMConfigurationManager.currentConfig.model: \(managerConfig.model)")
+        print("   - LLMAPIService.currentConfig?.model: \(currentConfig?.model ?? "nil")")
+        
         if currentConfig == nil || !currentConfig!.isValid() {
             currentConfig = managerConfig
             print("⚠️ 检测到配置不同步，已重新同步")
+            print("   - 同步后的model: \(currentConfig?.model ?? "nil")")
         }
-        return currentConfig ?? managerConfig
+        
+        let finalConfig = currentConfig ?? managerConfig
+        print("   - 最终使用的model: \(finalConfig.model)")
+        
+        return finalConfig
     }
 }

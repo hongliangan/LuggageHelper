@@ -16,6 +16,12 @@ extension LLMAPIService {
     func identifyItem(name: String, model: String? = nil, brand: String? = nil, additionalInfo: String? = nil) async throws -> ItemInfo {
         // 确保配置同步
         let config = ensureConfigurationSync()
+        
+        // 添加调试信息
+        print("🔍 identifyItem 使用的配置:")
+        print("   - baseURL: \(config.baseURL)")
+        print("   - model: \(config.model)")
+        print("   - apiKey: \(config.apiKey.isEmpty ? "空" : "已设置(\(config.apiKey.prefix(10))...)")")
            
         guard config.isValid() else {
         // 添加更详细的错误信息

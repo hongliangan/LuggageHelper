@@ -46,7 +46,7 @@ final class AIViewModel: ObservableObject {
     
     private let apiService = LLMAPIService.shared
     let aiService = AIServiceExtensions.shared
-    private let configManager = APIConfigurationManager.shared
+    private let configManager = LLMConfigurationManager.shared
     
     // MARK: - 物品识别功能
     

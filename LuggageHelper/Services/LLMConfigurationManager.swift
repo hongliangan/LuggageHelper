@@ -104,6 +104,11 @@ final class LLMConfigurationManager: ObservableObject {
         
         let model = defaults.string(forKey: UserDefaultsKeys.llmApiModel) ?? LLMAPIService.LLMServiceConfig.defaultModel(for: providerType)
         
+        // 添加调试信息
+        print("🔍 模型加载调试:")
+        print("   - UserDefaults中的llmApiModel: \(defaults.string(forKey: UserDefaultsKeys.llmApiModel) ?? "nil")")
+        print("   - 最终使用的model: \(model)")
+        
         // 修复 max_tokens 加载逻辑
         let maxTokensValue = defaults.object(forKey: UserDefaultsKeys.llmApiMaxTokens) as? Int
         let maxTokens = maxTokensValue ?? 4000  // 只有当键不存在时才使用默认值

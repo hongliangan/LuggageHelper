@@ -42,6 +42,13 @@ struct ContentView: View {
                     Text("统计")
                 }
             
+            // 高级功能
+            AdvancedFeaturesView()
+                .tabItem {
+                    Image(systemName: "wand.and.stars")
+                    Text("AI功能")
+                }
+            
             // 设置
             NavigationView {
                 APIConfigurationView()
