@@ -25,14 +25,20 @@ final class APIConfigurationManager: ObservableObject {
     
     /// 是否存在已保存的配置
     var hasSavedConfiguration: Bool {
-        return UserDefaults.standard.string(forKey: UserDefaultsKeys.apiKey) != nil
+        let defaults = UserDefaults.standard
+        // 安全地检查配置是否存在
+        let apiKey = defaults.string(forKey: UserDefaultsKeys.apiKey) ?? ""
+        let baseURL = defaults.string(forKey: UserDefaultsKeys.apiBaseURL) ?? ""
+        
+        return !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+               !baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     
     /// 配置变更通知
     var configurationChanged = PassthroughSubject<Void, Never>()
     
     /// API服务实例
-    private let apiService = SiliconFlowAPIService.shared
+    private let apiService = LLMAPIService.shared
     
     // MARK: - 配置管理
     
@@ -75,9 +81,20 @@ final class APIConfigurationManager: ObservableObject {
         defaults.set(config.temperature, forKey: UserDefaultsKeys.apiTemperature)
         defaults.set(config.topP, forKey: UserDefaultsKeys.apiTopP)
         
+        // 同步到LLM配置系统
+        defaults.set(config.baseURL, forKey: UserDefaultsKeys.llmApiBaseURL)
+        defaults.set(config.apiKey, forKey: UserDefaultsKeys.llmApiKey)
+        defaults.set(config.model, forKey: UserDefaultsKeys.llmApiModel)
+        defaults.set(config.maxTokens, forKey: UserDefaultsKeys.llmApiMaxTokens)
+        defaults.set(config.temperature, forKey: UserDefaultsKeys.llmApiTemperature)
+        defaults.set(config.topP, forKey: UserDefaultsKeys.llmApiTopP)
+        
         currentConfig = config
         isConfigValid = config.isValid()
         configurationChanged.send()
+        
+        // 通知LLM配置管理器重新加载配置
+        LLMConfigurationManager.shared.loadConfiguration()
     }
     
     /// 清除配置
@@ -158,7 +175,20 @@ final class APIConfigurationManager: ObservableObject {
     /// 测试连接
     func testConnection() async -> ConnectionTestResult {
         do {
-            let result = try await apiService.testConnection(config: currentConfig)
+            // 将 APIServiceConfig 转换为 LLMServiceConfig
+            let llmConfig = LLMAPIService.LLMServiceConfig(
+                providerType: .openai, // 默认使用 OpenAI 格式
+                baseURL: currentConfig.baseURL,
+                apiKey: currentConfig.apiKey,
+                model: currentConfig.model,
+                maxTokens: currentConfig.maxTokens,
+                temperature: currentConfig.temperature,
+                topP: currentConfig.topP,
+                topK: nil,
+                frequencyPenalty: nil,
+                stop: nil
+            )
+            let result = try await apiService.testConnection(config: llmConfig)
             return .success(result)
         } catch {
             return .failure(error.localizedDescription)
@@ -267,5 +297,18 @@ enum ConnectionTestResult {
         case .failure:
             return false
         }
+    }
+}
+
+extension APIServiceConfig {
+    func toLLMServiceConfig() -> LLMAPIService.LLMServiceConfig {
+        return LLMAPIService.LLMServiceConfig(
+            baseURL: self.baseURL,
+            apiKey: self.apiKey,
+            model: self.model,
+            maxTokens: self.maxTokens,
+            temperature: self.temperature,
+            topP: self.topP
+        )
     }
 }

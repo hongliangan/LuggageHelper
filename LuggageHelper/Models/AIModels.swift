@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import CoreImage
 
 // MARK: - AI 功能相关数据模型
 
@@ -175,6 +176,7 @@ enum WarningType: String, Codable {
     case liquid = "liquid"              // 液体限制
     case battery = "battery"            // 电池限制
     case prohibited = "prohibited"       // 禁止携带
+    case attention = "attention"         // 注意事项
 }
 
 /// 警告严重程度
@@ -252,14 +254,7 @@ enum ImportanceLevel: String, Codable, CaseIterable {
         }
     }
     
-    var color: String {
-        switch self {
-        case .essential: return "red"
-        case .important: return "orange"
-        case .recommended: return "blue"
-        case .optional: return "gray"
-        }
-    }
+    
 }
 
 /// 用户档案
@@ -1059,6 +1054,494 @@ extension UIImage {
     
     /// 增强对比度
     func enhanceContrast(factor: Float = 1.2) -> UIImage {
+        guard let cgImage = self.cgImage else { return self }
+        
+        // 这里可以实现图片对比度增强逻辑
+        return self
+    }
+}
+
+// MARK: - 替代品建议相关模型
+
+/// 替代品物品
+struct AlternativeItem: Codable, Identifiable {
+    let id = UUID()
+    let name: String
+    let category: ItemCategory
+    let weight: Double // 克
+    let volume: Double // 立方厘米
+    let dimensions: Dimensions
+    let advantages: [String] // 优势
+    let disadvantages: [String] // 劣势
+    let suitability: Double // 适用性评分 0.0-1.0
+    let reason: String // 推荐理由
+    let estimatedPrice: Double? // 预估价格（元）
+    let availability: String? // 购买渠道
+    let compatibilityScore: Double // 兼容性评分 0.0-1.0
+    let functionalityMatch: Double? // 功能匹配度 0.0-1.0
+    let versatility: Double? // 多功能性评分 0.0-1.0
+    
+    enum CodingKeys: String, CodingKey {
+        case name, category, weight, volume, dimensions, advantages, disadvantages, 
+             suitability, reason, estimatedPrice, availability, compatibilityScore,
+             functionalityMatch, versatility
+    }
+    
+    init(name: String, category: ItemCategory, weight: Double, volume: Double,
+         dimensions: Dimensions, advantages: [String], disadvantages: [String],
+         suitability: Double, reason: String, estimatedPrice: Double? = nil,
+         availability: String? = nil, compatibilityScore: Double,
+         functionalityMatch: Double? = nil, versatility: Double? = nil) {
+        self.name = name
+        self.category = category
+        self.weight = weight
+        self.volume = volume
+        self.dimensions = dimensions
+        self.advantages = advantages
+        self.disadvantages = disadvantages
+        self.suitability = suitability
+        self.reason = reason
+        self.estimatedPrice = estimatedPrice
+        self.availability = availability
+        self.compatibilityScore = compatibilityScore
+        self.functionalityMatch = functionalityMatch
+        self.versatility = versatility
+    }
+}
+
+/// 替代品约束条件
+struct AlternativeConstraints: Codable {
+    let maxWeight: Double? // 最大重量限制（克）
+    let maxVolume: Double? // 最大体积限制（立方厘米）
+    let maxBudget: Double? // 预算上限（元）
+    let requiredFeatures: [String]? // 必需功能
+    let excludedBrands: [String]? // 排除品牌
+    let preferredBrands: [String]? // 偏好品牌
+    let minCompatibilityScore: Double? // 最低兼容性评分
+    let prioritizeWeight: Bool // 是否优先考虑重量
+    let prioritizeVolume: Bool // 是否优先考虑体积
+    let prioritizePrice: Bool // 是否优先考虑价格
+    
+    init(maxWeight: Double? = nil, maxVolume: Double? = nil, maxBudget: Double? = nil,
+         requiredFeatures: [String]? = nil, excludedBrands: [String]? = nil,
+         preferredBrands: [String]? = nil, minCompatibilityScore: Double? = nil,
+         prioritizeWeight: Bool = false, prioritizeVolume: Bool = false,
+         prioritizePrice: Bool = false) {
+        self.maxWeight = maxWeight
+        self.maxVolume = maxVolume
+        self.maxBudget = maxBudget
+        self.requiredFeatures = requiredFeatures
+        self.excludedBrands = excludedBrands
+        self.preferredBrands = preferredBrands
+        self.minCompatibilityScore = minCompatibilityScore
+        self.prioritizeWeight = prioritizeWeight
+        self.prioritizeVolume = prioritizeVolume
+        self.prioritizePrice = prioritizePrice
+    }
+    
+    /// 默认约束条件
+    static let `default` = AlternativeConstraints()
+    
+    /// 轻量化约束
+    static let lightweight = AlternativeConstraints(
+        prioritizeWeight: true,
+        prioritizeVolume: true
+    )
+    
+    /// 经济型约束
+    static let budget = AlternativeConstraints(
+        prioritizePrice: true
+    )
+}
+
+/// 替代品建议场景
+struct AlternativeScenario: Codable, Identifiable {
+    let id = UUID()
+    let scenario: String // 使用场景
+    let bestAlternative: String // 最佳替代品名称
+    let reason: String // 推荐理由
+    let applicableConstraints: AlternativeConstraints? // 适用约束
+    
+    enum CodingKeys: String, CodingKey {
+        case scenario, bestAlternative, reason, applicableConstraints
+    }
+    
+    init(scenario: String, bestAlternative: String, reason: String,
+         applicableConstraints: AlternativeConstraints? = nil) {
+        self.scenario = scenario
+        self.bestAlternative = bestAlternative
+        self.reason = reason
+        self.applicableConstraints = applicableConstraints
+    }
+}
+
+/// 替代品比较结果
+struct AlternativeComparison: Codable, Identifiable {
+    let id = UUID()
+    let originalItem: String // 原物品名称
+    let alternatives: [AlternativeItem] // 替代品列表
+    let comparisonMatrix: [ComparisonCriteria: [String: Double]] // 比较矩阵
+    let recommendations: [AlternativeScenario] // 场景推荐
+    let overallBest: String? // 总体最佳选择
+    let createdAt: Date
+    
+    enum CodingKeys: String, CodingKey {
+        case originalItem, alternatives, comparisonMatrix, recommendations, overallBest, createdAt
+    }
+    
+    init(originalItem: String, alternatives: [AlternativeItem],
+         comparisonMatrix: [ComparisonCriteria: [String: Double]] = [:],
+         recommendations: [AlternativeScenario] = [], overallBest: String? = nil) {
+        self.originalItem = originalItem
+        self.alternatives = alternatives
+        self.comparisonMatrix = comparisonMatrix
+        self.recommendations = recommendations
+        self.overallBest = overallBest
+        self.createdAt = Date()
+    }
+}
+
+/// 比较标准
+enum ComparisonCriteria: String, Codable, CaseIterable {
+    case weight = "weight"
+    case volume = "volume"
+    case price = "price"
+    case functionality = "functionality"
+    case durability = "durability"
+    case portability = "portability"
+    case versatility = "versatility"
+    case availability = "availability"
+    
+    var displayName: String {
+        switch self {
+        case .weight: return "重量"
+        case .volume: return "体积"
+        case .price: return "价格"
+        case .functionality: return "功能性"
+        case .durability: return "耐用性"
+        case .portability: return "便携性"
+        case .versatility: return "多功能性"
+        case .availability: return "可获得性"
+        }
+    }
+    
+    var unit: String {
+        switch self {
+        case .weight: return "g"
+        case .volume: return "cm³"
+        case .price: return "元"
+        case .functionality, .durability, .portability, .versatility, .availability: return "分"
+        }
+    }
+}
+
+/// 批量替代品建议结果
+struct BatchAlternativeResult: Codable, Identifiable {
+    let id = UUID()
+    let originalItems: [String] // 原物品列表
+    let alternativesByItem: [String: [AlternativeItem]] // 按物品分组的替代品
+    let globalRecommendations: [GlobalRecommendation] // 全局建议
+    let potentialSavings: PotentialSavings // 潜在节省
+    let processingTime: TimeInterval // 处理时间
+    let createdAt: Date
+    
+    enum CodingKeys: String, CodingKey {
+        case originalItems, alternativesByItem, globalRecommendations, 
+             potentialSavings, processingTime, createdAt
+    }
+    
+    init(originalItems: [String], alternativesByItem: [String: [AlternativeItem]],
+         globalRecommendations: [GlobalRecommendation] = [],
+         potentialSavings: PotentialSavings = PotentialSavings(),
+         processingTime: TimeInterval = 0) {
+        self.originalItems = originalItems
+        self.alternativesByItem = alternativesByItem
+        self.globalRecommendations = globalRecommendations
+        self.potentialSavings = potentialSavings
+        self.processingTime = processingTime
+        self.createdAt = Date()
+    }
+}
+
+/// 全局建议
+struct GlobalRecommendation: Codable, Identifiable {
+    let id = UUID()
+    let category: ItemCategory
+    let suggestion: String
+    let affectedItems: [String] // 影响的物品
+    let potentialSavings: PotentialSavings
+    let priority: Int // 优先级 1-10
+    
+    enum CodingKeys: String, CodingKey {
+        case category, suggestion, affectedItems, potentialSavings, priority
+    }
+    
+    init(category: ItemCategory, suggestion: String, affectedItems: [String],
+         potentialSavings: PotentialSavings, priority: Int = 5) {
+        self.category = category
+        self.suggestion = suggestion
+        self.affectedItems = affectedItems
+        self.potentialSavings = potentialSavings
+        self.priority = priority
+    }
+}
+
+/// 潜在节省
+struct PotentialSavings: Codable {
+    let weight: Double // 重量节省（克）
+    let volume: Double // 体积节省（立方厘米）
+    let cost: Double? // 成本节省（元）
+    let spaceUtilization: Double? // 空间利用率提升
+    
+    init(weight: Double = 0, volume: Double = 0, cost: Double? = nil,
+         spaceUtilization: Double? = nil) {
+        self.weight = weight
+        self.volume = volume
+        self.cost = cost
+        self.spaceUtilization = spaceUtilization
+    }
+    
+    /// 格式化显示重量节省
+    var formattedWeightSaving: String {
+        if weight >= 1000 {
+            return String(format: "%.1fkg", weight / 1000)
+        } else {
+            return String(format: "%.0fg", weight)
+        }
+    }
+    
+    /// 格式化显示体积节省
+    var formattedVolumeSaving: String {
+        if volume >= 1000 {
+            return String(format: "%.1fL", volume / 1000)
+        } else {
+            return String(format: "%.0fcm³", volume)
+        }
+    }
+}
+
+// MARK: - 航空公司政策相关扩展模型
+
+/// 航班类型
+enum FlightType: String, Codable, CaseIterable {
+    case domestic = "domestic"
+    case international = "international"
+    case regional = "regional"
+    
+    var displayName: String {
+        switch self {
+        case .domestic: return "国内航班"
+        case .international: return "国际航班"
+        case .regional: return "地区航班"
+        }
+    }
+}
+
+/// 舱位等级
+enum CabinClass: String, Codable, CaseIterable {
+    case economy = "economy"
+    case premiumEconomy = "premiumEconomy"
+    case business = "business"
+    case first = "first"
+    
+    var displayName: String {
+        switch self {
+        case .economy: return "经济舱"
+        case .premiumEconomy: return "超级经济舱"
+        case .business: return "商务舱"
+        case .first: return "头等舱"
+        }
+    }
+}
+
+/// 行李尺寸
+struct LuggageDimensions: Codable {
+    let length: Double // 长度（厘米）
+    let width: Double  // 宽度（厘米）
+    let height: Double // 高度（厘米）
+    
+    /// 计算总尺寸（长+宽+高）
+    var totalDimension: Double {
+        return length + width + height
+    }
+    
+    /// 计算体积
+    var volume: Double {
+        return length * width * height
+    }
+    
+    /// 格式化显示
+    var formatted: String {
+        return String(format: "%.0f×%.0f×%.0f cm", length, width, height)
+    }
+}
+
+/// 政策违规类型
+enum ViolationType: String, Codable, CaseIterable {
+    case overweight = "overweight"
+    case oversized = "oversized"
+    case prohibited = "prohibited"
+    case restricted = "restricted"
+    case liquid = "liquid"
+    case battery = "battery"
+    case other = "other"
+    
+    var displayName: String {
+        switch self {
+        case .overweight: return "超重"
+        case .oversized: return "超尺寸"
+        case .prohibited: return "禁止携带"
+        case .restricted: return "限制携带"
+        case .liquid: return "液体限制"
+        case .battery: return "电池限制"
+        case .other: return "其他"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .overweight: return "⚖️"
+        case .oversized: return "📏"
+        case .prohibited: return "🚫"
+        case .restricted: return "⚠️"
+        case .liquid: return "💧"
+        case .battery: return "🔋"
+        case .other: return "❓"
+        }
+    }
+}
+
+/// 违规严重程度
+enum ViolationSeverity: String, Codable, CaseIterable {
+    case low = "low"
+    case medium = "medium"
+    case high = "high"
+    case critical = "critical"
+    
+    var displayName: String {
+        switch self {
+        case .low: return "轻微"
+        case .medium: return "中等"
+        case .high: return "严重"
+        case .critical: return "严重违规"
+        }
+    }
+    
+    var color: String {
+        switch self {
+        case .low: return "yellow"
+        case .medium: return "orange"
+        case .high: return "red"
+        case .critical: return "purple"
+        }
+    }
+}
+
+/// 政策违规
+struct PolicyViolation: Codable, Identifiable {
+    let id = UUID()
+    let itemName: String
+    let violationType: ViolationType
+    let description: String
+    let severity: ViolationSeverity
+    let suggestion: String
+    
+    enum CodingKeys: String, CodingKey {
+        case itemName, violationType, description, severity, suggestion
+    }
+    
+    init(itemName: String, violationType: ViolationType, description: String,
+         severity: ViolationSeverity, suggestion: String) {
+        self.itemName = itemName
+        self.violationType = violationType
+        self.description = description
+        self.severity = severity
+        self.suggestion = suggestion
+    }
+}
+
+/// 政策警告
+struct PolicyWarning: Codable, Identifiable {
+    let id = UUID()
+    let itemName: String
+    let warningType: WarningType
+    let message: String
+    let suggestion: String
+    
+    enum CodingKeys: String, CodingKey {
+        case itemName, warningType, message, suggestion
+    }
+    
+    init(itemName: String, warningType: WarningType, message: String, suggestion: String) {
+        self.itemName = itemName
+        self.warningType = warningType
+        self.message = message
+        self.suggestion = suggestion
+    }
+}
+
+/// 预估费用
+struct EstimatedFees: Codable {
+    let overweightFee: Double // 超重费用
+    let oversizeFee: Double // 超尺寸费用
+    let currency: String // 货币单位
+    
+    /// 总费用
+    var totalFee: Double {
+        return overweightFee + oversizeFee
+    }
+    
+    /// 格式化显示
+    var formatted: String {
+        return String(format: "%.2f %@", totalFee, currency)
+    }
+}
+
+/// 政策检查结果
+struct PolicyCheckResult: Codable, Identifiable {
+    let id = UUID()
+    let overallCompliance: Bool // 总体合规性
+    let violations: [PolicyViolation] // 违规项目
+    let warnings: [PolicyWarning] // 警告项目
+    let recommendations: [String] // 建议
+    let estimatedFees: EstimatedFees? // 预估费用
+    let checkedAt: Date
+    
+    enum CodingKeys: String, CodingKey {
+        case overallCompliance, violations, warnings, recommendations, estimatedFees, checkedAt
+    }
+    
+    init(overallCompliance: Bool, violations: [PolicyViolation], warnings: [PolicyWarning],
+         recommendations: [String], estimatedFees: EstimatedFees? = nil) {
+        self.overallCompliance = overallCompliance
+        self.violations = violations
+        self.warnings = warnings
+        self.recommendations = recommendations
+        self.estimatedFees = estimatedFees
+        self.checkedAt = Date()
+    }
+    
+    /// 是否有严重违规
+    var hasCriticalViolations: Bool {
+        return violations.contains { $0.severity == .critical || $0.severity == .high }
+    }
+    
+    /// 违规数量
+    var violationCount: Int {
+        return violations.count
+    }
+    
+    /// 警告数量
+    var warningCount: Int {
+        return warnings.count
+    }
+}
+
+// MARK: - UIImage Extensions
+
+extension UIImage {
+    /// 调整对比度
+    func adjustContrast(factor: Float) -> UIImage {
         guard let cgImage = self.cgImage else { return self }
         
         let context = CIContext()

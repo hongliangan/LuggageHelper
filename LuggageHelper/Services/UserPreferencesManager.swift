@@ -1,8 +1,9 @@
 import Foundation
+import Combine
 
 /// 用户偏好管理器
 /// 管理用户的旅行偏好、历史记录和个性化建议
-class UserPreferencesManager {
+class UserPreferencesManager: ObservableObject {
     // MARK: - 单例模式
     
     /// 共享实例

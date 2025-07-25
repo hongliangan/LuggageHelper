@@ -157,10 +157,20 @@ struct APIConfigurationView: View {
     // MARK: - 操作方法
     
     /// 测试连接
+    // 修复 testConnection 方法
     private func testConnection() {
         Task {
             do {
-                let result = try await SiliconFlowAPIService.shared.testConnection(config: configManager.currentConfig)
+                let llmConfig = LLMAPIService.LLMServiceConfig(
+                    providerType: .openai,
+                    baseURL: configManager.currentConfig.baseURL,
+                    apiKey: configManager.currentConfig.apiKey,
+                    model: configManager.currentConfig.model,
+                    maxTokens: configManager.currentConfig.maxTokens,
+                    temperature: configManager.currentConfig.temperature,
+                    topP: configManager.currentConfig.topP
+                )
+                let result = try await LLMAPIService.shared.testConnection(config: llmConfig)
                 await MainActor.run {
                     testResultMessage = result
                     testResultType = .success
@@ -256,7 +266,7 @@ struct ConfigurationValidationView: View {
 // MARK: - 行李建议生成视图
 
 struct LuggageSuggestionView: View {
-    @StateObject private var apiService = SiliconFlowAPIService.shared
+    @ObservedObject private var apiService = LLMAPIService.shared
     @State private var destination = ""
     @State private var duration = 7
     @State private var season = "春季"
@@ -342,7 +352,7 @@ struct LuggageSuggestionView: View {
         
         Task {
             do {
-                let result = try await apiService.generateLuggageSuggestion(
+                let result = try await LLMAPIService.shared.generateTravelChecklist(
                     destination: destination,
                     duration: duration,
                     season: season,
@@ -350,7 +360,7 @@ struct LuggageSuggestionView: View {
                 )
                 
                 await MainActor.run {
-                    suggestion = result
+                    suggestion = formatTravelSuggestion(result)
                     isLoading = false
                 }
             } catch {
@@ -361,6 +371,45 @@ struct LuggageSuggestionView: View {
                 }
             }
         }
+    }
+    
+    /// 格式化旅行建议为字符串显示
+    private func formatTravelSuggestion(_ travelSuggestion: TravelSuggestion) -> String {
+        var result = "\n📋 **推荐物品清单**\n\n"
+        
+        // 修复：使用正确的属性名 suggestedItems
+        for item in travelSuggestion.suggestedItems {
+            result += "• \(item.name)\n"
+            if !item.reason.isEmpty {
+                result += "  理由: \(item.reason)\n"
+            }
+            result += "\n"
+        }
+        
+        if !travelSuggestion.categories.isEmpty {
+            result += "\n📂 **主要类别**\n"
+            for category in travelSuggestion.categories {
+                result += "• \(category.displayName)\n"
+            }
+        }
+        
+        // 添加旅行小贴士
+        if !travelSuggestion.tips.isEmpty {
+            result += "\n💡 **旅行小贴士**\n"
+            for tip in travelSuggestion.tips {
+                result += "• \(tip)\n"
+            }
+        }
+        
+        // 添加注意事项
+        if !travelSuggestion.warnings.isEmpty {
+            result += "\n⚠️ **注意事项**\n"
+            for warning in travelSuggestion.warnings {
+                result += "• \(warning)\n"
+            }
+        }
+        
+        return result
     }
 }
 
@@ -395,3 +444,9 @@ struct ModelDetail {
     let contextLength: String
     let price: String
 }
+
+// 修复类型转换（类似第4点）
+// 修复动态成员访问 - 移除不存在的方法调用
+// 将：
+// llmService.generateLuggageSuggestion
+// 改为正确的方法名或移除该调用

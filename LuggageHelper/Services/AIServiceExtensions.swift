@@ -19,7 +19,7 @@ final class AIServiceExtensions {
     // MARK: - 属性
     
     /// API 服务
-    private let apiService = SiliconFlowAPIService.shared
+    private let apiService = LLMAPIService.shared
     
     /// 缓存管理器
     private var cache = NSCache<NSString, CacheItem>()
@@ -123,7 +123,7 @@ final class AIServiceExtensions {
     
     /// 处理 API 错误
     private func handleAPIError(_ error: Error) -> AIServiceError {
-        if let apiError = error as? SiliconFlowAPIService.APIError {
+        if let apiError = error as? LLMAPIService.APIError {
             switch apiError {
             case .networkError(let error):
                 return .networkError(error)
@@ -139,6 +139,8 @@ final class AIServiceExtensions {
                 return .configurationError
             case .insufficientData:
                 return .insufficientData
+            case .unsupportedProvider(_):
+                return .configurationError
             }
         }
         return .networkError(error)

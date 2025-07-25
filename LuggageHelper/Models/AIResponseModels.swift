@@ -302,6 +302,221 @@ struct PersonalizedSuggestionsResponse: Codable {
     }
 }
 
+/// 政策检查结果响应模型
+struct PolicyCheckResultResponse: Codable {
+    let overallCompliance: Bool
+    let violations: [PolicyViolationResponse]
+    let warnings: [PolicyWarningResponse]
+    let recommendations: [String]
+    let estimatedFees: EstimatedFeesResponse?
+    
+    /// 转换为 PolicyCheckResult
+    func toPolicyCheckResult() -> PolicyCheckResult {
+        let policyViolations = violations.map { $0.toPolicyViolation() }
+        let policyWarnings = warnings.map { $0.toPolicyWarning() }
+        let fees = estimatedFees?.toEstimatedFees()
+        
+        return PolicyCheckResult(
+            overallCompliance: overallCompliance,
+            violations: policyViolations,
+            warnings: policyWarnings,
+            recommendations: recommendations,
+            estimatedFees: fees
+        )
+    }
+}
+
+/// 政策违规响应模型
+struct PolicyViolationResponse: Codable {
+    let itemName: String
+    let violationType: String
+    let description: String
+    let severity: String
+    let suggestion: String
+    
+    /// 转换为 PolicyViolation
+    func toPolicyViolation() -> PolicyViolation {
+        let type = ViolationType(rawValue: violationType) ?? .prohibited
+        let sev = ViolationSeverity(rawValue: severity) ?? .medium
+        
+        return PolicyViolation(
+            itemName: itemName,
+            violationType: type,
+            description: description,
+            severity: sev,
+            suggestion: suggestion
+        )
+    }
+}
+
+/// 政策警告响应模型
+struct PolicyWarningResponse: Codable {
+    let itemName: String
+    let warningType: String
+    let message: String
+    let suggestion: String
+    
+    /// 转换为 PolicyWarning
+    func toPolicyWarning() -> PolicyWarning {
+        let type = WarningType(rawValue: warningType) ?? .attention
+        
+        return PolicyWarning(
+            itemName: itemName,
+            warningType: type,
+            message: message,
+            suggestion: suggestion
+        )
+    }
+}
+
+/// 预估费用响应模型
+struct EstimatedFeesResponse: Codable {
+    let overweightFee: Double
+    let oversizeFee: Double
+    let currency: String
+    
+    /// 转换为 EstimatedFees
+    func toEstimatedFees() -> EstimatedFees {
+        return EstimatedFees(
+            overweightFee: overweightFee,
+            oversizeFee: oversizeFee,
+            currency: currency
+        )
+    }
+}
+
+// MARK: - 替代品建议响应模型
+
+/// 替代品建议响应模型
+struct AlternativeItemsResponse: Codable {
+    let originalItem: OriginalItemResponse
+    let alternatives: [AlternativeItemDetailResponse]
+    let recommendations: [RecommendationResponse]?
+    
+    struct OriginalItemResponse: Codable {
+        let name: String
+        let category: String
+        let weight: Double
+        let volume: Double
+    }
+    
+    struct RecommendationResponse: Codable {
+        let scenario: String
+        let bestAlternative: String
+        let reason: String
+    }
+    
+    /// 转换为 AlternativeItem 数组
+    func toAlternativeItems() -> [AlternativeItem] {
+        return alternatives.map { $0.toAlternativeItem() }
+    }
+}
+
+/// 替代品详细信息响应模型
+struct AlternativeItemDetailResponse: Codable {
+    let name: String
+    let category: String
+    let weight: Double
+    let volume: Double
+    let dimensions: DimensionsResponse
+    let advantages: [String]
+    let disadvantages: [String]
+    let suitability: Double
+    let reason: String
+    let estimatedPrice: Double?
+    let availability: String?
+    let compatibilityScore: Double
+    let functionalityMatch: Double?
+    let versatility: Double?
+    
+    /// 转换为 AlternativeItem
+    func toAlternativeItem() -> AlternativeItem {
+        return AlternativeItem(
+            name: name,
+            category: ItemCategory(rawValue: category) ?? .other,
+            weight: weight,
+            volume: volume,
+            dimensions: dimensions.toDimensions(),
+            advantages: advantages,
+            disadvantages: disadvantages,
+            suitability: suitability,
+            reason: reason,
+            estimatedPrice: estimatedPrice,
+            availability: availability,
+            compatibilityScore: compatibilityScore,
+            functionalityMatch: functionalityMatch,
+            versatility: versatility
+        )
+    }
+}
+
+/// 批量替代品建议响应模型
+struct BatchAlternativeItemsResponse: Codable {
+    let batchResults: [String: [AlternativeItemDetailResponse]]
+    let globalRecommendations: [GlobalRecommendationResponse]?
+    
+    struct GlobalRecommendationResponse: Codable {
+        let category: String
+        let suggestion: String
+        let potentialSavings: PotentialSavingsResponse
+        
+        struct PotentialSavingsResponse: Codable {
+            let weight: Double
+            let volume: Double
+        }
+    }
+    
+    /// 转换为批量替代品结果
+    func toBatchAlternativeItems() -> [String: [AlternativeItem]] {
+        var result: [String: [AlternativeItem]] = [:]
+        
+        for (itemName, alternatives) in batchResults {
+            result[itemName] = alternatives.map { $0.toAlternativeItem() }
+        }
+        
+        return result
+    }
+}
+
+/// 功能性替代品响应模型
+struct FunctionalAlternativesResponse: Codable {
+    let functionality: String
+    let alternatives: [AlternativeItemDetailResponse]
+    let bestMatch: BestMatchResponse?
+    
+    struct BestMatchResponse: Codable {
+        let name: String
+        let reason: String
+    }
+    
+    /// 转换为 AlternativeItem 数组
+    func toFunctionalAlternatives() -> [AlternativeItem] {
+        return alternatives.map { $0.toAlternativeItem() }
+    }
+}
+
+/// 替代品约束条件响应模型
+struct AlternativeConstraintsResponse: Codable {
+    let maxWeight: Double?
+    let maxVolume: Double?
+    let maxBudget: Double?
+    let requiredFeatures: [String]?
+    let excludedBrands: [String]?
+    let preferredBrands: [String]?
+    
+    /// 转换为 AlternativeConstraints
+    func toAlternativeConstraints() -> AlternativeConstraints {
+        return AlternativeConstraints(
+            maxWeight: maxWeight,
+            maxVolume: maxVolume,
+            maxBudget: maxBudget,
+            requiredFeatures: requiredFeatures,
+            excludedBrands: excludedBrands,
+            preferredBrands: preferredBrands
+        )
+    }
+}
+
 // MARK: - 通用响应包装器
 
 /// API 响应包装器
@@ -487,6 +702,72 @@ struct AIResponseParser {
         
         let responses = try JSONDecoder().decode([ItemInfoResponse].self, from: data)
         return responses.toItemInfoArray()
+    }
+    
+    /// 从 JSON 字符串解析航空公司政策
+    static func parseAirlinePolicy(from jsonString: String) throws -> AirlineLuggagePolicy {
+        let cleanedJSON = extractJSON(from: jsonString)
+        guard let data = cleanedJSON.data(using: .utf8) else {
+            throw AIParsingError.invalidJSON
+        }
+        
+        let response = try JSONDecoder().decode(AirlinePolicyResponse.self, from: data)
+        return response.toAirlineLuggagePolicy()
+    }
+    
+    /// 从 JSON 字符串解析航空公司政策数组
+    static func parseAirlinePolicyArray(from jsonString: String) throws -> [AirlineLuggagePolicy] {
+        let cleanedJSON = extractJSON(from: jsonString)
+        guard let data = cleanedJSON.data(using: .utf8) else {
+            throw AIParsingError.invalidJSON
+        }
+        
+        let responses = try JSONDecoder().decode([AirlinePolicyResponse].self, from: data)
+        return responses.map { $0.toAirlineLuggagePolicy() }
+    }
+    
+    /// 从 JSON 字符串解析政策检查结果
+    static func parsePolicyCheckResult(from jsonString: String) throws -> PolicyCheckResult {
+        let cleanedJSON = extractJSON(from: jsonString)
+        guard let data = cleanedJSON.data(using: .utf8) else {
+            throw AIParsingError.invalidJSON
+        }
+        
+        let response = try JSONDecoder().decode(PolicyCheckResultResponse.self, from: data)
+        return response.toPolicyCheckResult()
+    }
+    
+    /// 从 JSON 字符串解析替代品建议
+    static func parseAlternativeItems(from jsonString: String) throws -> [AlternativeItem] {
+        let cleanedJSON = extractJSON(from: jsonString)
+        guard let data = cleanedJSON.data(using: .utf8) else {
+            throw AIParsingError.invalidJSON
+        }
+        
+        let response = try JSONDecoder().decode(AlternativeItemsResponse.self, from: data)
+        return response.toAlternativeItems()
+    }
+    
+    /// 从 JSON 字符串解析批量替代品建议
+    static func parseBatchAlternativeItems(from jsonString: String) throws -> [String: [AlternativeItem]] {
+        let cleanedJSON = extractJSON(from: jsonString)
+        guard let data = cleanedJSON.data(using: .utf8) else {
+            throw AIParsingError.invalidJSON
+        }
+        
+        let response = try JSONDecoder().decode(BatchAlternativeItemsResponse.self, from: data)
+        return response.toBatchAlternativeItems()
+    }
+    
+    /// 从 JSON 字符串解析功能性替代品建议
+    static func parseFunctionalAlternatives(from jsonString: String) throws -> [AlternativeItem] {
+        let cleanedJSON = extractJSON(from: jsonString)
+        guard let data = cleanedJSON.data(using: .utf8) else {
+            throw AIParsingError.invalidJSON
+        }
+        
+        let response = try JSONDecoder().decode(FunctionalAlternativesResponse.self, from: data)
+        return response.toFunctionalAlternatives()
     }
     
     /// 提取 JSON 内容

@@ -15,7 +15,7 @@ struct APIServiceConfig: Codable, Equatable {
     init(baseURL: String = "https://api.siliconflow.cn/v1",
          apiKey: String = "",
          model: String = "deepseek-ai/DeepSeek-V3",
-         maxTokens: Int = 512, // 从2048降低到1024
+         maxTokens: Int = 2048, // 从512改为2048
          temperature: Double = 0.7,
          topP: Double = 0.9) {
         self.baseURL = baseURL

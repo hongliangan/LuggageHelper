@@ -9,6 +9,17 @@ struct UserDefaultsKeys {
     static let apiMaxTokens = "api_max_tokens"
     static let apiTemperature = "api_temperature"
     static let apiTopP = "api_top_p"
+    
+    // MARK: - LLM Configuration Keys
+    static let llmProviderType = "llm_provider_type"
+    static let llmApiBaseURL = "llm_api_base_url"
+    static let llmApiKey = "llm_api_key"
+    static let llmApiModel = "llm_api_model"
+    static let llmApiMaxTokens = "llm_api_max_tokens"
+    static let llmApiTemperature = "llm_api_temperature"
+    static let llmApiTopP = "llm_api_top_p"
+    static let llmApiTopK = "llm_api_top_k"
+    static let llmApiFrequencyPenalty = "llm_api_frequency_penalty"
 
     // MARK: - Item Data Keys
     /// 物品分类键

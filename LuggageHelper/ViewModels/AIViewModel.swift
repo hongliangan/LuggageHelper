@@ -44,7 +44,7 @@ final class AIViewModel: ObservableObject {
     
     // MARK: - 私有属性
     
-    private let apiService = SiliconFlowAPIService.shared
+    private let apiService = LLMAPIService.shared
     let aiService = AIServiceExtensions.shared
     private let configManager = APIConfigurationManager.shared
     
@@ -59,6 +59,18 @@ final class AIViewModel: ObservableObject {
     func identifyItem(name: String, model: String? = nil, brand: String? = nil, additionalInfo: String? = nil) async {
         guard !name.isEmpty else {
             errorMessage = "请输入物品名称"
+            return
+        }
+        
+        // 使用实时配置验证，而不是依赖缓存的isConfigValid属性
+        let configManager = LLMConfigurationManager.shared
+        let currentConfig = configManager.currentConfig
+        
+        // 强制刷新配置状态
+        configManager.refreshConfigurationStatus()
+        
+        guard currentConfig.isValid() else {
+            errorMessage = "LLM API配置无效，请先在设置中配置API"
             return
         }
         
