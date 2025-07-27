@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 // MARK: - AI 增强功能扩展
 
@@ -680,5 +681,287 @@ extension LLMAPIService {
         }
         
         return try parseFunctionalAlternatives(from: content)
+    }
+}
+// MARK: - 缓存支持的实现方法
+
+extension LLMAPIService {
+    
+    /// 执行物品识别（内部方法）
+    internal func performItemIdentification(name: String, model: String?) async throws -> ItemInfo {
+        return try await identifyItem(name: name, model: model)
+    }
+    
+    /// 执行照片识别（内部方法）
+    internal func performPhotoRecognition(_ image: UIImage) async throws -> ItemInfo {
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw APIError.invalidResponse
+        }
+        return try await identifyItemFromPhoto(imageData)
+    }
+    
+    /// 执行旅行建议生成（内部方法）
+    internal func performTravelSuggestionGeneration(
+        destination: String,
+        duration: Int,
+        season: String,
+        activities: [String],
+        userPreferences: UserPreferences?
+    ) async throws -> TravelSuggestion {
+        return try await generateTravelChecklist(
+            destination: destination,
+            duration: duration,
+            season: season,
+            activities: activities,
+            userPreferences: userPreferences
+        )
+    }
+    
+    /// 执行装箱优化（内部方法）
+    internal func performPackingOptimization(items: [LuggageItem], luggage: Luggage) async throws -> PackingPlan {
+        // 转换为ItemInfo格式
+        let itemInfos = items.map { item in
+            ItemInfo(
+                name: item.name,
+                category: item.category,
+                weight: item.weight,
+                volume: item.volume,
+                dimensions: Dimensions(length: 10, width: 10, height: 10), // 默认尺寸
+                confidence: 1.0,
+                source: "用户输入"
+            )
+        }
+        
+        return try await optimizePacking(items: itemInfos, luggage: luggage)
+    }
+    
+    /// 执行替代品建议（内部方法）
+    internal func performAlternativeSuggestion(itemName: String, constraints: PackingConstraints) async throws -> [ItemInfo] {
+        // 创建临时ItemInfo用于建议
+        let tempItem = ItemInfo(
+            name: itemName,
+            category: .other,
+            weight: 100,
+            volume: 100,
+            dimensions: Dimensions(length: 5, width: 5, height: 4),
+            confidence: 0.5,
+            source: "临时创建"
+        )
+        
+        let alternativeConstraints = AlternativeConstraints(
+            maxWeight: constraints.maxWeight,
+            maxVolume: constraints.maxVolume,
+            maxBudget: nil,
+            requiredFeatures: nil
+        )
+        
+        let alternatives = try await suggestAlternatives(
+            for: tempItem,
+            constraints: alternativeConstraints
+        )
+        
+        // 转换为ItemInfo格式
+        return alternatives.map { alt in
+            ItemInfo(
+                name: alt.name,
+                category: alt.category,
+                weight: alt.weight,
+                volume: alt.volume,
+                dimensions: alt.dimensions,
+                confidence: alt.suitability,
+                source: "AI替代建议"
+            )
+        }
+    }
+    
+    /// 执行航司政策查询（内部方法）
+    internal func performAirlinePolicyQuery(airline: String) async throws -> AirlineLuggagePolicy {
+        return try await queryAirlinePolicy(airline: airline)
+    }
+    
+    /// 装箱优化
+    /// - Parameters:
+    ///   - items: 物品列表
+    ///   - luggage: 行李箱信息
+    /// - Returns: 装箱方案
+    func optimizePacking(items: [ItemInfo], luggage: Luggage) async throws -> PackingPlan {
+        let config = currentConfig ?? LLMConfigurationManager.shared.currentConfig
+        
+        guard config.isValid() else {
+            throw APIError.configurationError("LLM API配置无效")
+        }
+        
+        let itemsList = items.enumerated().map { index, item in
+            "\(index + 1). \(item.name)（\(item.weight)g，\(item.volume)cm³，\(item.dimensions?.length ?? 0)×\(item.dimensions?.width ?? 0)×\(item.dimensions?.height ?? 0)cm）"
+        }.joined(separator: "\n")
+        
+        let prompt = """
+        请为以下物品设计最优的装箱方案：
+        
+        物品清单：
+        \(itemsList)
+        
+        行李箱信息：
+        - 名称：\(luggage.name)
+        - 容量：\(luggage.capacity)L
+        - 空箱重量：\(luggage.emptyWeight)g
+        - 类型：\(luggage.luggageType == .carryOn ? "随身行李" : "托运行李")
+        
+        请以JSON格式返回：
+        {
+            "luggageId": "\(luggage.id)",
+            "items": [
+                {
+                    "itemName": "物品名称",
+                    "position": {
+                        "layer": 层级（1-底层，2-中层，3-顶层），
+                        "x": X坐标（0.0-1.0），
+                        "y": Y坐标（0.0-1.0），
+                        "z": Z坐标（0.0-1.0）
+                    },
+                    "priority": 装箱优先级（1-5），
+                    "orientation": "摆放方向（horizontal/vertical）",
+                    "notes": "装箱注意事项"
+                }
+            ],
+            "totalWeight": 总重量（克，数值类型），
+            "totalVolume": 总体积（立方厘米，数值类型），
+            "efficiency": 空间利用率（0.0-1.0，数值类型），
+            "warnings": [
+                {
+                    "type": "警告类型（overweight/oversized/fragile）",
+                    "message": "警告信息",
+                    "severity": "严重程度（low/medium/high）"
+                }
+            ],
+            "tips": ["装箱小贴士"],
+            "alternatives": [
+                {
+                    "suggestion": "替代方案",
+                    "reason": "建议理由"
+                }
+            ]
+        }
+        
+        请考虑物品的重量分布、易碎性、使用频率等因素。
+        """
+        
+        let messages = [
+            ChatMessage.system("你是一个专业的装箱优化专家，具有丰富的空间规划和物品摆放经验。请始终返回有效的JSON格式数据，确保数值字段为数字类型。"),
+            ChatMessage.user(prompt)
+        ]
+        
+        let request = ChatCompletionRequest(
+            model: config.model,
+            messages: messages,
+            maxTokens: min(config.maxTokens ?? 2048, 3000),
+            temperature: config.temperature ?? 0.7,
+            topP: config.topP ?? 0.9,
+            stream: false,
+            responseFormat: nil,
+            topK: config.topK ?? 50,
+            frequencyPenalty: config.frequencyPenalty ?? 0.0,
+            stop: nil
+        )
+        
+        let response = try await performRequest(request, config: config)
+        guard let content = response.choices.first?.message.content else {
+            throw APIError.invalidResponse
+        }
+        
+        return try parsePackingPlan(from: content, luggageId: luggage.id)
+    }
+    
+    /// 查询航空公司政策
+    /// - Parameter airline: 航空公司名称
+    /// - Returns: 航司政策信息
+    func queryAirlinePolicy(airline: String) async throws -> AirlineLuggagePolicy {
+        let config = currentConfig ?? LLMConfigurationManager.shared.currentConfig
+        
+        guard config.isValid() else {
+            throw APIError.configurationError("LLM API配置无效")
+        }
+        
+        let prompt = """
+        请查询\(airline)航空公司的最新行李政策信息，包括托运行李和随身行李的规定。
+        
+        请以JSON格式返回：
+        {
+            "airline": "\(airline)",
+            "lastUpdated": "最后更新时间",
+            "checkedBaggage": {
+                "weightLimit": 重量限制（公斤，数值类型），
+                "sizeLimit": {
+                    "length": 长度限制（厘米，数值类型），
+                    "width": 宽度限制（厘米，数值类型），
+                    "height": 高度限制（厘米，数值类型）
+                },
+                "pieces": 允许件数（数值类型），
+                "fees": [
+                    {
+                        "description": "费用描述",
+                        "amount": 费用金额（数值类型），
+                        "currency": "货币单位"
+                    }
+                ]
+            },
+            "carryOn": {
+                "weightLimit": 重量限制（公斤，数值类型），
+                "sizeLimit": {
+                    "length": 长度限制（厘米，数值类型），
+                    "width": 宽度限制（厘米，数值类型），
+                    "height": 高度限制（厘米，数值类型）
+                },
+                "pieces": 允许件数（数值类型）
+            },
+            "restrictions": [
+                {
+                    "item": "限制物品",
+                    "rule": "限制规则",
+                    "category": "限制类别（prohibited/restricted/conditional）"
+                }
+            ],
+            "specialItems": [
+                {
+                    "category": "特殊物品类别",
+                    "rules": "特殊规则",
+                    "additionalFees": 额外费用（数值类型，可选）
+                }
+            ],
+            "tips": ["实用小贴士"],
+            "contactInfo": {
+                "phone": "客服电话",
+                "website": "官方网站",
+                "email": "客服邮箱"
+            }
+        }
+        
+        请提供准确和最新的政策信息，如果某些信息不确定，请在tips中说明。
+        """
+        
+        let messages = [
+            ChatMessage.system("你是一个专业的航空政策查询专家，具有丰富的航空公司政策知识。请始终返回有效的JSON格式数据，确保数值字段为数字类型。"),
+            ChatMessage.user(prompt)
+        ]
+        
+        let request = ChatCompletionRequest(
+            model: config.model,
+            messages: messages,
+            maxTokens: min(config.maxTokens ?? 2048, 3000),
+            temperature: config.temperature ?? 0.3, // 降低温度以获得更准确的信息
+            topP: config.topP ?? 0.9,
+            stream: false,
+            responseFormat: nil,
+            topK: config.topK ?? 50,
+            frequencyPenalty: config.frequencyPenalty ?? 0.0,
+            stop: nil
+        )
+        
+        let response = try await performRequest(request, config: config)
+        guard let content = response.choices.first?.message.content else {
+            throw APIError.invalidResponse
+        }
+        
+        return try parseAirlinePolicy(from: content)
     }
 }

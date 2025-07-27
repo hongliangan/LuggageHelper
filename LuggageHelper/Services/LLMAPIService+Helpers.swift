@@ -33,7 +33,7 @@ extension LLMAPIService {
     internal func parsePackingPlanWithMapping(from content: String, luggageId: UUID, itemIdMapping: [String: UUID]) throws -> PackingPlan {
         let cleanedJSON = extractJSONContent(from: content)
         guard let data = cleanedJSON.data(using: .utf8) else {
-            throw APIError.invalidResponse
+            throw AIError.invalidResponse
         }
         
         do {
@@ -89,7 +89,7 @@ extension LLMAPIService {
     internal func parseCategoryArray(from content: String, itemCount: Int) throws -> [ItemCategory] {
         // 提取JSON部分
         guard let jsonData = extractJSONArray(from: content) else {
-            throw APIError.invalidResponse
+            throw AIError.invalidResponse
         }
         
         do {
@@ -97,7 +97,7 @@ extension LLMAPIService {
             
             // 验证数组长度
             guard categoryStrings.count == itemCount else {
-                throw APIError.invalidResponse
+                throw AIError.invalidResponse
             }
             
             // 转换为ItemCategory
@@ -105,7 +105,7 @@ extension LLMAPIService {
                 ItemCategory(rawValue: categoryString) ?? .other
             }
         } catch {
-            throw APIError.decodingError(error)
+            throw AIError.decodingError(error)
         }
     }
     
@@ -113,14 +113,14 @@ extension LLMAPIService {
     internal func parseTagsArray(from content: String) throws -> [String] {
         // 提取JSON部分
         guard let jsonData = extractJSONArray(from: content) else {
-            throw APIError.invalidResponse
+            throw AIError.invalidResponse
         }
         
         do {
             let tags = try JSONDecoder().decode([String].self, from: jsonData)
             return tags
         } catch {
-            throw APIError.decodingError(error)
+            throw AIError.decodingError(error)
         }
     }
     
@@ -206,27 +206,14 @@ extension LLMAPIService {
         return try AIResponseParser.parsePolicyCheckResult(from: content)
     }
     
-    /// 解析替代品建议
-    internal func parseAlternativeItems(from content: String) throws -> [AlternativeItem] {
-        return try AIResponseParser.parseAlternativeItems(from: content)
-    }
-    
-    /// 解析批量替代品建议
-    internal func parseBatchAlternativeItems(from content: String) throws -> [String: [AlternativeItem]] {
-        return try AIResponseParser.parseBatchAlternativeItems(from: content)
-    }
-    
-    /// 解析功能性替代品建议
-    internal func parseFunctionalAlternatives(from content: String) throws -> [AlternativeItem] {
-        return try AIResponseParser.parseFunctionalAlternatives(from: content)
-    }
+
     
     // MARK: - 错误处理辅助方法
     
     /// 处理API错误并返回用户友好的错误信息
-    internal func handleAPIError(_ error: Error) -> APIError {
-        if let apiError = error as? APIError {
-            return apiError
+    internal func handleAPIError(_ error: Error) -> AIError {
+        if let aiError = error as? AIError {
+            return aiError
         }
         
         if let urlError = error as? URLError {
@@ -471,5 +458,227 @@ extension LLMAPIService {
         }
         
         return warnings
+    }
+    
+    // MARK: - 新增缓存相关解析方法
+    
+    /// 解析装箱计划
+    internal func parsePackingPlan(from content: String, luggageId: UUID) throws -> PackingPlan {
+        let cleanedJSON = extractJSONContent(from: content)
+        guard let data = cleanedJSON.data(using: .utf8) else {
+            throw AIError.invalidResponse
+        }
+        
+        do {
+            let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let json = jsonObject else {
+                throw AIError.invalidResponse
+            }
+            
+            // 解析装箱物品
+            var packingItems: [PackingItem] = []
+            if let itemsArray = json["items"] as? [[String: Any]] {
+                for (index, itemJson) in itemsArray.enumerated() {
+                    let itemName = itemJson["itemName"] as? String ?? "物品\(index + 1)"
+                    let priority = itemJson["priority"] as? Int ?? 5
+                    let notes = itemJson["notes"] as? String ?? ""
+                    
+                    // 创建临时UUID（实际使用中应该有正确的映射）
+                    let itemId = UUID()
+                    
+                    let packingItem = PackingItem(
+                        itemId: itemId,
+                        position: .middle, // 简化处理
+                        priority: priority,
+                        reason: notes
+                    )
+                    packingItems.append(packingItem)
+                }
+            }
+            
+            let totalWeight = json["totalWeight"] as? Double ?? 0
+            let totalVolume = json["totalVolume"] as? Double ?? 0
+            let efficiency = json["efficiency"] as? Double ?? 0.5
+            
+            // 解析警告
+            var warnings: [PackingWarning] = []
+            if let warningsArray = json["warnings"] as? [[String: Any]] {
+                for warningJson in warningsArray {
+                    let type = warningJson["type"] as? String ?? "attention"
+                    let message = warningJson["message"] as? String ?? ""
+                    let severity = warningJson["severity"] as? String ?? "medium"
+                    
+                    let warning = PackingWarning(
+                        type: WarningType(rawValue: type) ?? .attention,
+                        message: message,
+                        severity: WarningSeverity(rawValue: severity) ?? .medium
+                    )
+                    warnings.append(warning)
+                }
+            }
+            
+            let suggestions = json["tips"] as? [String] ?? []
+            
+            return PackingPlan(
+                luggageId: luggageId,
+                items: packingItems,
+                totalWeight: totalWeight,
+                totalVolume: totalVolume,
+                efficiency: efficiency,
+                warnings: warnings,
+                suggestions: suggestions
+            )
+            
+        } catch {
+            throw APIError.decodingError(error)
+        }
+    }
+    
+    /// 解析航空公司政策（新格式）
+    internal func parseAirlinePolicy(from content: String) throws -> AirlinePolicy {
+        let cleanedJSON = extractJSONContent(from: content)
+        guard let data = cleanedJSON.data(using: .utf8) else {
+            throw AIError.invalidResponse
+        }
+        
+        do {
+            let decoder = JSONDecoder()
+            let policy = try decoder.decode(AirlinePolicy.self, from: data)
+            return policy
+        } catch {
+            throw AIError.decodingError(error)
+        }
+    }
+    
+    /// 解析替代品建议
+    internal func parseAlternativeItems(from content: String) throws -> [AlternativeItem] {
+        let cleanedJSON = extractJSONContent(from: content)
+        guard let data = cleanedJSON.data(using: .utf8) else {
+            throw AIError.invalidResponse
+        }
+        
+        do {
+            let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let json = jsonObject,
+                  let alternativesArray = json["alternatives"] as? [[String: Any]] else {
+                throw AIError.invalidResponse
+            }
+            
+            var alternatives: [AlternativeItem] = []
+            
+            for altJson in alternativesArray {
+                let name = altJson["name"] as? String ?? ""
+                let category = altJson["category"] as? String ?? "other"
+                let weight = altJson["weight"] as? Double ?? 0
+                let volume = altJson["volume"] as? Double ?? 0
+                
+                // 解析尺寸
+                var dimensions = Dimensions(length: 0, width: 0, height: 0)
+                if let dimJson = altJson["dimensions"] as? [String: Any] {
+                    let length = dimJson["length"] as? Double ?? 0
+                    let width = dimJson["width"] as? Double ?? 0
+                    let height = dimJson["height"] as? Double ?? 0
+                    dimensions = Dimensions(length: length, width: width, height: height)
+                }
+                
+                let advantages = altJson["advantages"] as? [String] ?? []
+                let disadvantages = altJson["disadvantages"] as? [String] ?? []
+                let suitability = altJson["suitability"] as? Double ?? 0.5
+                let reason = altJson["reason"] as? String ?? ""
+                let estimatedPrice = altJson["estimatedPrice"] as? Double
+                let availability = altJson["availability"] as? String ?? ""
+                let compatibilityScore = altJson["compatibilityScore"] as? Double ?? 0.5
+                
+                let alternative = AlternativeItem(
+                    name: name,
+                    category: ItemCategory(rawValue: category) ?? .other,
+                    weight: weight,
+                    volume: volume,
+                    dimensions: dimensions,
+                    advantages: advantages,
+                    disadvantages: disadvantages,
+                    suitability: suitability,
+                    reason: reason,
+                    estimatedPrice: estimatedPrice,
+                    availability: availability,
+                    compatibilityScore: compatibilityScore
+                )
+                
+                alternatives.append(alternative)
+            }
+            
+            return alternatives
+            
+        } catch {
+            throw AIError.decodingError(error)
+        }
+    }
+    
+    /// 解析批量替代品建议
+    internal func parseBatchAlternativeItems(from content: String) throws -> [String: [AlternativeItem]] {
+        let cleanedJSON = extractJSONContent(from: content)
+        guard let data = cleanedJSON.data(using: .utf8) else {
+            throw AIError.invalidResponse
+        }
+        
+        do {
+            let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let json = jsonObject,
+                  let batchResults = json["batchResults"] as? [String: Any] else {
+                throw AIError.invalidResponse
+            }
+            
+            var results: [String: [AlternativeItem]] = [:]
+            
+            for (itemName, alternativesData) in batchResults {
+                if let alternativesArray = alternativesData as? [[String: Any]] {
+                    var alternatives: [AlternativeItem] = []
+                    
+                    for altJson in alternativesArray {
+                        let name = altJson["name"] as? String ?? ""
+                        let category = altJson["category"] as? String ?? "other"
+                        let weight = altJson["weight"] as? Double ?? 0
+                        let volume = altJson["volume"] as? Double ?? 0
+                        
+                        let dimensions = Dimensions(length: 0, width: 0, height: 0) // 简化处理
+                        let advantages = altJson["advantages"] as? [String] ?? []
+                        let disadvantages = altJson["disadvantages"] as? [String] ?? []
+                        let suitability = altJson["suitability"] as? Double ?? 0.5
+                        let reason = altJson["reason"] as? String ?? ""
+                        let compatibilityScore = altJson["compatibilityScore"] as? Double ?? 0.5
+                        
+                        let alternative = AlternativeItem(
+                            name: name,
+                            category: ItemCategory(rawValue: category) ?? .other,
+                            weight: weight,
+                            volume: volume,
+                            dimensions: dimensions,
+                            advantages: advantages,
+                            disadvantages: disadvantages,
+                            suitability: suitability,
+                            reason: reason,
+                            estimatedPrice: nil,
+                            availability: "",
+                            compatibilityScore: compatibilityScore
+                        )
+                        
+                        alternatives.append(alternative)
+                    }
+                    
+                    results[itemName] = alternatives
+                }
+            }
+            
+            return results
+            
+        } catch {
+            throw AIError.decodingError(error)
+        }
+    }
+    
+    /// 解析功能性替代品建议
+    internal func parseFunctionalAlternatives(from content: String) throws -> [AlternativeItem] {
+        // 与parseAlternativeItems类似的实现
+        return try parseAlternativeItems(from: content)
     }
 }

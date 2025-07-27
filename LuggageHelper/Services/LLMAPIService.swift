@@ -1,12 +1,35 @@
 import Foundation
 import Combine
 import os.log
+import CryptoKit
+import UIKit
 
 // 确保导入配置管理器
 // LLMConfigurationManager 应该在同一个模块中，不需要额外导入
 
-/// LLM API服务
-/// 提供与各种LLM API的完整交互功能，支持OpenAI和Anthropic格式
+/// LLM API 服务 - 核心 AI 功能引擎
+/// 
+/// 这是 LuggageHelper 的核心 AI 服务类，提供完整的人工智能功能支持：
+/// 
+/// 🤖 主要功能：
+/// - 智能物品识别：通过名称和型号自动获取物品信息
+/// - 照片识别：基于图像内容识别物品类型和属性
+/// - 旅行建议：生成个性化的旅行物品清单
+/// - 装箱优化：AI 驱动的最优装箱方案
+/// - 航司政策：自动查询和解读航空公司政策
+/// - 物品替代：智能推荐轻便替代品
+/// 
+/// ⚡ 性能特性：
+/// - 智能缓存系统：显著提升响应速度
+/// - 请求队列管理：优化并发和资源使用
+/// - 性能监控：实时跟踪和优化系统性能
+/// - 错误恢复：完善的错误处理和重试机制
+/// 
+/// 🔧 技术架构：
+/// - 支持 OpenAI 和 Anthropic API 格式
+/// - 异步并发处理，确保 UI 流畅性
+/// - 模块化设计，易于扩展和维护
+/// - 线程安全，支持多并发访问
 final class LLMAPIService: ObservableObject {
     
     // MARK: - 单例模式
@@ -16,6 +39,15 @@ final class LLMAPIService: ObservableObject {
     
     /// 取消订阅集合
     private var cancellables = Set<AnyCancellable>()
+    
+    /// 缓存管理器
+    private let cacheManager = AICacheManager.shared
+    
+    /// 请求队列管理器
+    private let requestQueue = AIRequestQueue.shared
+    
+    /// 性能监控器
+    private let performanceMonitor = PerformanceMonitor.shared
     
     /// 私有初始化
     private init() {
@@ -350,6 +382,247 @@ final class LLMAPIService: ObservableObject {
         )
         
         return try await performRequest(request, config: config)
+    }
+    
+    // MARK: - 缓存增强的AI功能方法
+    
+    /// 智能物品识别（带缓存）
+    func identifyItemWithCache(name: String, model: String? = nil) async throws -> ItemInfo {
+        let requestId = UUID()
+        let request = ItemIdentificationRequest(name: name, model: model)
+        
+        // 开始性能监控
+        await performanceMonitor.startRequest(id: requestId, type: .itemIdentification)
+        
+        // 检查缓存
+        if let cachedResult = await cacheManager.getCachedItemIdentification(for: request) {
+            logger.info("从缓存获取物品识别结果: \(name)")
+            await performanceMonitor.recordCacheHit(type: .itemIdentification, size: MemoryLayout<ItemInfo>.size)
+            await performanceMonitor.endRequest(id: requestId, type: .itemIdentification, fromCache: true)
+            return cachedResult
+        }
+        
+        // 记录缓存未命中
+        await performanceMonitor.recordCacheMiss(type: .itemIdentification)
+        
+        do {
+            // 通过请求队列执行
+            let aiRequest = AIRequest(
+                type: .itemIdentification,
+                priority: .normal,
+                parameters: ["name": name, "model": model ?? ""]
+            )
+            
+            let result = try await requestQueue.enqueue(aiRequest) {
+                return try await self.performItemIdentification(name: name, model: model)
+            }
+            
+            // 缓存结果
+            await cacheManager.cacheItemIdentification(request: request, response: result)
+            await performanceMonitor.recordCacheWrite(type: .itemIdentification, size: MemoryLayout<ItemInfo>.size)
+            
+            // 结束性能监控
+            await performanceMonitor.endRequest(id: requestId, type: .itemIdentification, fromCache: false)
+            
+            return result
+        } catch {
+            await performanceMonitor.recordRequestFailure(id: requestId, type: .itemIdentification, error: error)
+            throw error
+        }
+    }
+    
+    /// 智能照片识别（带缓存）
+    func identifyItemFromPhotoWithCache(_ image: UIImage) async throws -> ItemInfo {
+        let requestId = UUID()
+        let imageHash = generateImageHash(image)
+        
+        // 开始性能监控
+        await performanceMonitor.startRequest(id: requestId, type: .photoRecognition)
+        
+        // 检查缓存
+        if let cachedResult = await cacheManager.getCachedPhotoRecognition(for: imageHash) {
+            logger.info("从缓存获取照片识别结果")
+            await performanceMonitor.recordCacheHit(type: .photoRecognition, size: MemoryLayout<ItemInfo>.size)
+            await performanceMonitor.endRequest(id: requestId, type: .photoRecognition, fromCache: true)
+            return cachedResult
+        }
+        
+        // 记录缓存未命中
+        await performanceMonitor.recordCacheMiss(type: .photoRecognition)
+        
+        do {
+            // 通过请求队列执行
+            let aiRequest = AIRequest(
+                type: .photoRecognition,
+                priority: .high,
+                parameters: ["imageHash": imageHash]
+            )
+            
+            let result = try await requestQueue.enqueue(aiRequest) {
+                return try await self.performPhotoRecognition(image)
+            }
+            
+            // 缓存结果
+            await cacheManager.cachePhotoRecognition(imageHash: imageHash, response: result)
+            await performanceMonitor.recordCacheWrite(type: .photoRecognition, size: MemoryLayout<ItemInfo>.size)
+            
+            // 结束性能监控
+            await performanceMonitor.endRequest(id: requestId, type: .photoRecognition, fromCache: false)
+            
+            return result
+        } catch {
+            await performanceMonitor.recordRequestFailure(id: requestId, type: .photoRecognition, error: error)
+            throw error
+        }
+    }
+    
+    /// 生成旅行建议（带缓存）
+    func generateTravelSuggestionsWithCache(
+        destination: String,
+        duration: Int,
+        season: String,
+        activities: [String],
+        userPreferences: UserPreferences? = nil
+    ) async throws -> TravelSuggestion {
+        let request = TravelSuggestionRequest(
+            destination: destination,
+            duration: duration,
+            season: season,
+            activities: activities,
+            userPreferences: userPreferences?.serialized()
+        )
+        
+        // 检查缓存
+        if let cachedResult = await cacheManager.getCachedTravelSuggestions(for: request) {
+            logger.info("从缓存获取旅行建议: \(destination)")
+            return cachedResult
+        }
+        
+        // 通过请求队列执行
+        let aiRequest = AIRequest(
+            type: .travelSuggestions,
+            priority: .normal,
+            parameters: [
+                "destination": destination,
+                "duration": duration,
+                "season": season,
+                "activities": activities
+            ]
+        )
+        
+        let result = try await requestQueue.enqueue(aiRequest) {
+            return try await self.performTravelSuggestionGeneration(
+                destination: destination,
+                duration: duration,
+                season: season,
+                activities: activities,
+                userPreferences: userPreferences
+            )
+        }
+        
+        // 缓存结果
+        await cacheManager.cacheTravelSuggestions(request: request, response: result)
+        
+        return result
+    }
+    
+    /// 装箱优化（带缓存）
+    func optimizePackingWithCache(
+        items: [LuggageItem],
+        luggage: Luggage
+    ) async throws -> PackingPlan {
+        let itemIds = items.map { $0.id }
+        let request = PackingOptimizationRequest(
+            itemIds: itemIds,
+            luggageId: luggage.id,
+            constraints: luggage.serializedConstraints()
+        )
+        
+        // 检查缓存
+        if let cachedResult = await cacheManager.getCachedPackingOptimization(for: request) {
+            logger.info("从缓存获取装箱优化结果")
+            return cachedResult
+        }
+        
+        // 通过请求队列执行
+        let aiRequest = AIRequest(
+            type: .packingOptimization,
+            priority: .normal,
+            parameters: [
+                "itemIds": itemIds,
+                "luggageId": luggage.id
+            ]
+        )
+        
+        let result = try await requestQueue.enqueue(aiRequest) {
+            return try await self.performPackingOptimization(items: items, luggage: luggage)
+        }
+        
+        // 缓存结果
+        await cacheManager.cachePackingOptimization(request: request, response: result)
+        
+        return result
+    }
+    
+    /// 物品替代建议（带缓存）
+    func suggestAlternativesWithCache(
+        for itemName: String,
+        constraints: PackingConstraints
+    ) async throws -> [ItemInfo] {
+        let request = AlternativesRequest(
+            itemName: itemName,
+            constraints: constraints.serialized()
+        )
+        
+        // 检查缓存
+        if let cachedResult = await cacheManager.getCachedAlternatives(for: request) {
+            logger.info("从缓存获取替代建议: \(itemName)")
+            return cachedResult
+        }
+        
+        // 通过请求队列执行
+        let aiRequest = AIRequest(
+            type: .alternatives,
+            priority: .normal,
+            parameters: [
+                "itemName": itemName,
+                "constraints": constraints.serialized()
+            ]
+        )
+        
+        let result = try await requestQueue.enqueue(aiRequest) {
+            return try await self.performAlternativeSuggestion(itemName: itemName, constraints: constraints)
+        }
+        
+        // 缓存结果
+        await cacheManager.cacheAlternatives(request: request, response: result)
+        
+        return result
+    }
+    
+    /// 航空公司政策查询（带缓存）
+    func queryAirlinePolicyWithCache(airline: String) async throws -> AirlineLuggagePolicy {
+        // 检查缓存
+        if let cachedResult = await cacheManager.getCachedAirlinePolicy(for: airline) {
+            logger.info("从缓存获取航司政策: \(airline)")
+            return cachedResult
+        }
+        
+        // 通过请求队列执行
+        let aiRequest = AIRequest(
+            type: .airlinePolicy,
+            priority: .low,
+            parameters: ["airline": airline]
+        )
+        
+        let result = try await requestQueue.enqueue(aiRequest) {
+            return try await self.performAirlinePolicyQuery(airline: airline)
+        }
+        
+        // 缓存结果
+        await cacheManager.cacheAirlinePolicy(airline: airline, response: result)
+        
+        return result
     }
     
     /// 发送流式聊天完成请求
@@ -786,5 +1059,68 @@ extension LLMAPIService {
         print("   - 最终使用的model: \(finalConfig.model)")
         
         return finalConfig
+    }
+    
+    // MARK: - 缓存辅助方法
+    
+    /// 生成图片哈希值
+    private func generateImageHash(_ image: UIImage) -> String {
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            return UUID().uuidString
+        }
+        
+        let hash = SHA256.hash(data: imageData)
+        return hash.compactMap { String(format: "%02x", $0) }.joined()
+    }
+    
+    /// 获取缓存统计信息
+    func getCacheStatistics() async -> CacheStatistics {
+        return await cacheManager.getCacheStatistics()
+    }
+    
+    /// 获取请求队列状态
+    func getQueueStatus() async -> QueueStatus {
+        return await requestQueue.getQueueStatus()
+    }
+    
+    /// 清理过期缓存
+    func clearExpiredCache() async {
+        await cacheManager.clearExpiredEntries()
+    }
+    
+    /// 清理所有缓存
+    func clearAllCache() async {
+        await cacheManager.clearAllCache()
+    }
+    
+    /// 清理特定类别的缓存
+    func clearCacheCategory(_ category: String) async {
+        await cacheManager.clearCacheCategory(category)
+    }
+    
+    // MARK: - 性能监控
+    
+    /// 性能统计信息
+    struct PerformanceStats {
+        let cacheHitRate: Double
+        let averageResponseTime: TimeInterval
+        let totalRequests: Int
+        let cachedRequests: Int
+        let queuedRequests: Int
+    }
+    
+    /// 获取性能统计
+    func getPerformanceStats() async -> PerformanceStats {
+        let cacheStats = await cacheManager.getCacheStatistics()
+        let queueStatus = await requestQueue.getQueueStatus()
+        
+        // 这里可以添加更详细的性能统计逻辑
+        return PerformanceStats(
+            cacheHitRate: 0.0, // 需要实现缓存命中率统计
+            averageResponseTime: 0.0, // 需要实现响应时间统计
+            totalRequests: 0, // 需要实现请求计数
+            cachedRequests: cacheStats.totalEntries,
+            queuedRequests: queueStatus.pendingCount
+        )
     }
 }
