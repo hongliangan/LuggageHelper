@@ -840,12 +840,12 @@ struct PackingOptimizerView: View {
     }
     
     // 类别分布部分
-    private func categoryBreakdownSection(_ categories: [CategoryAnalysis]) -> some View {
+    private func categoryBreakdownSection(_ categories: [PackingCategoryAnalysis]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("类别分布")
                 .font(.headline)
             
-            ForEach(categories.sorted { $0.totalWeight > $1.totalWeight }, id: \.category) { category in
+            ForEach(categories.sorted(by: { $0.totalWeight > $1.totalWeight }), id: \.category) { category in
                 HStack {
                     Text(category.category.icon)
                     Text(category.category.displayName)

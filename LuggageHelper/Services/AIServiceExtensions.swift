@@ -348,28 +348,21 @@ final class AIServiceExtensions {
             return nil
         }
         
-        // 调整图片尺寸
-        let maxDimension: CGFloat = 1024
-        let scale: CGFloat
-        if image.size.width > image.size.height {
-            scale = maxDimension / image.size.width
-        } else {
-            scale = maxDimension / image.size.height
+        // 使用新的 ImagePreprocessor 进行图像预处理
+        let preprocessor = ImagePreprocessor.shared
+        
+        // 在后台队列中执行预处理
+        let semaphore = DispatchSemaphore(value: 0)
+        var processedData: Data?
+        
+        Task {
+            let preprocessingResult = await preprocessor.preprocessImage(image, options: .default)
+            processedData = preprocessingResult.processedImage.jpegData(compressionQuality: 0.8)
+            semaphore.signal()
         }
         
-        if scale < 1 {
-            let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-            UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
-            image.draw(in: CGRect(origin: .zero, size: newSize))
-            let resizedImage = UIGraphicsGetImageFromCurrentImageContext()
-            UIGraphicsEndImageContext()
-            
-            // 压缩质量
-            return resizedImage?.jpegData(compressionQuality: 0.7)
-        }
-        
-        // 如果图片已经足够小，只压缩质量
-        return image.jpegData(compressionQuality: 0.8)
+        semaphore.wait()
+        return processedData
     }
     
     /// 增强图片预处理
@@ -378,17 +371,21 @@ final class AIServiceExtensions {
             return nil
         }
         
-        // 1. 调整图片方向
-        let orientedImage = image.fixOrientation()
+        // 使用新的 ImagePreprocessor 进行综合预处理
+        let preprocessor = ImagePreprocessor.shared
         
-        // 2. 调整尺寸
-        let processedImage = orientedImage.resizeForAI()
+        let semaphore = DispatchSemaphore(value: 0)
+        var processedData: Data?
         
-        // 3. 增强对比度（可选）
-        let enhancedImage = processedImage.enhanceContrast()
+        Task {
+            // 使用所有预处理选项进行最佳处理
+            let preprocessingResult = await preprocessor.preprocessImage(image, options: .all)
+            processedData = preprocessingResult.processedImage.jpegData(compressionQuality: 0.8)
+            semaphore.signal()
+        }
         
-        // 4. 压缩
-        return enhancedImage.jpegData(compressionQuality: 0.8)
+        semaphore.wait()
+        return processedData
     }
     
     /// 多策略照片识别
@@ -429,11 +426,12 @@ final class AIServiceExtensions {
         let finalResult = mergeRecognitionResults(results)
         
         return PhotoRecognitionResult(
-            primaryResult: finalResult,
-            alternativeResults: results,
+            itemInfo: finalResult,
             confidence: confidence,
-            usedStrategies: usedStrategies,
-            processingTime: 0 // 这里可以添加计时
+            recognitionMethod: .hybrid,
+            processingTime: 0, // 这里可以添加计时
+            imageMetadata: ImageMetadata.mock,
+            alternatives: results.map { RecognitionCandidate(itemInfo: $0, confidence: confidence, source: "multi-strategy") }
         )
     }
     

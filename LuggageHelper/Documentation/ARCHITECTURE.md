@@ -50,6 +50,13 @@ LuggageHelper 采用现代 iOS 开发架构，结合 MVVM 模式、SwiftUI 和�
 - **StatisticsView**: 统计分析界面
 - **AdvancedFeaturesView**: AI 功能统一入口
 
+#### 照片识别增强视图
+- **AIPhotoIdentificationView**: 主要照片识别界面，支持拍照和相册选择
+- **RealTimeCameraView**: 实时相机识别界面，支持实时物品检测
+- **BatchRecognitionResultsView**: 批量识别结果展示
+- **PhotoRecognitionErrorGuidanceView**: 错误处理和用户引导界面
+- **OfflineModelManagementView**: 离线模型管理界面
+
 #### ViewModels (MVVM)
 - **LuggageViewModel**: 行李数据管理
 - **AIViewModel**: AI 功能状态管理
@@ -71,12 +78,39 @@ LLMAPIService (主服务)
 ├── LLMAPIService+AIFeatures (AI 功能扩展)
 ├── LLMAPIService+PackingFeatures (装箱功能)
 ├── LLMAPIService+Helpers (辅助方法)
+├── LLMAPIService+DataSecurity (数据安全扩展)
 └── AIRequestQueue (请求队列管理)
+
+// 照片识别服务架构
+PhotoRecognitionService (照片识别主服务)
+├── ImagePreprocessor (图像预处理)
+├── ObjectDetectionEngine (对象检测引擎)
+├── BatchRecognitionService (批量识别服务)
+├── OfflineRecognitionService (离线识别服务)
+├── RealTimeCameraManager (实时相机管理)
+└── PhotoRecognitionCacheManager (照片识别缓存)
+
+// 图像处理和分析
+ImageProcessingPipeline
+├── ImageHasher (图像哈希计算)
+├── ImageSimilarityMatcher (相似度匹配)
+├── ImageMemoryManager (内存管理)
+├── PhotoCacheStorage (缓存存储)
+└── RecognitionResultValidator (结果验证)
+
+// 用户体验增强服务
+UserExperienceServices
+├── PhotoRecognitionErrorRecoveryManager (错误恢复)
+├── PhotoRecognitionQualityManager (质量管理)
+├── UserFeedbackManager (用户反馈)
+├── PersonalizedRecognitionOptimizer (个性化优化)
+└── AccessibilityService (无障碍支持)
 
 // 支持服务
 AICacheManager (缓存管理)
 PerformanceMonitor (性能监控)
 AIItemCategoryManager (分类管理)
+DataSecurityService (数据安全)
 ```
 
 #### Core Services
@@ -117,6 +151,69 @@ struct CacheStatistics
 - **请求管理**: 并发控制和重试机制
 - **响应处理**: JSON 解析和错误处理
 - **安全通信**: HTTPS 和证书验证
+
+## 照片识别功能架构
+
+### 照片识别处理流程
+
+```mermaid
+graph TB
+    A[用户上传照片] --> B[图像预处理]
+    B --> C[质量验证]
+    C --> D{质量是否合格?}
+    D -->|否| E[图像增强]
+    E --> C
+    D -->|是| F[对象检测]
+    F --> G[多物品识别]
+    G --> H{检测到多个物品?}
+    H -->|是| I[用户选择物品]
+    H -->|否| J[单物品识别]
+    I --> J
+    J --> K[缓存查询]
+    K --> L{缓存命中?}
+    L -->|是| M[返回缓存结果]
+    L -->|否| N[AI识别]
+    N --> O[结果验证]
+    O --> P[缓存存储]
+    P --> Q[返回识别结果]
+    M --> Q
+```
+
+### 实时相机识别架构
+
+```mermaid
+graph LR
+    A[相机预览] --> B[实时帧处理]
+    B --> C[对象检测]
+    C --> D[检测框显示]
+    D --> E[用户点击]
+    E --> F[区域提取]
+    F --> G[识别处理]
+    G --> H[结果展示]
+```
+
+### 缓存系统架构
+
+```mermaid
+graph TB
+    subgraph "多级缓存系统"
+        A[内存缓存] --> B[磁盘缓存]
+        B --> C[相似度索引]
+        C --> D[云端缓存]
+    end
+    
+    subgraph "缓存策略"
+        E[精确匹配] --> F[相似度匹配]
+        F --> G[智能过期]
+        G --> H[自动清理]
+    end
+    
+    subgraph "性能优化"
+        I[并行处理] --> J[预计算]
+        J --> K[压缩存储]
+        K --> L[异步加载]
+    end
+```
 
 ## 设计模式
 

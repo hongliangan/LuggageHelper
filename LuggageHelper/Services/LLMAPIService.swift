@@ -41,10 +41,10 @@ final class LLMAPIService: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     
     /// 缓存管理器
-    private let cacheManager = AICacheManager.shared
+    internal let cacheManager = AICacheManager.shared
     
     /// 请求队列管理器
-    private let requestQueue = AIRequestQueue.shared
+    internal let requestQueue = AIRequestQueue.shared
     
     /// 性能监控器
     private let performanceMonitor = PerformanceMonitor.shared
@@ -482,14 +482,18 @@ final class LLMAPIService: ObservableObject {
         duration: Int,
         season: String,
         activities: [String],
-        userPreferences: UserPreferences? = nil
+        travelStyle: String = "standard",
+        budget: String = "medium",
+        companions: Int = 0
     ) async throws -> TravelSuggestion {
         let request = TravelSuggestionRequest(
             destination: destination,
             duration: duration,
             season: season,
             activities: activities,
-            userPreferences: userPreferences?.serialized()
+            travelStyle: travelStyle,
+            budget: budget,
+            companions: companions
         )
         
         // 检查缓存
@@ -516,7 +520,7 @@ final class LLMAPIService: ObservableObject {
                 duration: duration,
                 season: season,
                 activities: activities,
-                userPreferences: userPreferences
+                userPreferences: nil
             )
         }
         
@@ -533,9 +537,10 @@ final class LLMAPIService: ObservableObject {
     ) async throws -> PackingPlan {
         let itemIds = items.map { $0.id }
         let request = PackingOptimizationRequest(
-            itemIds: itemIds,
             luggageId: luggage.id,
-            constraints: luggage.serializedConstraints()
+            itemIds: itemIds,
+            constraints: PackingConstraints.default,
+            preferences: PackingPreferences.default
         )
         
         // 检查缓存
@@ -566,17 +571,17 @@ final class LLMAPIService: ObservableObject {
     
     /// 物品替代建议（带缓存）
     func suggestAlternativesWithCache(
-        for itemName: String,
-        constraints: PackingConstraints
+        for itemId: UUID,
+        constraints: AlternativeConstraints = .default
     ) async throws -> [ItemInfo] {
         let request = AlternativesRequest(
-            itemName: itemName,
-            constraints: constraints.serialized()
+            itemId: itemId,
+            constraints: constraints
         )
         
         // 检查缓存
         if let cachedResult = await cacheManager.getCachedAlternatives(for: request) {
-            logger.info("从缓存获取替代建议: \(itemName)")
+            logger.info("从缓存获取替代建议: \(itemId)")
             return cachedResult
         }
         
@@ -585,13 +590,13 @@ final class LLMAPIService: ObservableObject {
             type: .alternatives,
             priority: .normal,
             parameters: [
-                "itemName": itemName,
-                "constraints": constraints.serialized()
+                "itemId": itemId.uuidString,
+                "constraints": constraints
             ]
         )
         
         let result = try await requestQueue.enqueue(aiRequest) {
-            return try await self.performAlternativeSuggestion(itemName: itemName, constraints: constraints)
+            return try await self.performAlternativeSuggestionById(itemId: itemId, constraints: constraints)
         }
         
         // 缓存结果

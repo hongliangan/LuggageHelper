@@ -619,7 +619,7 @@ class PackingOptimizer {
         let categorizedItems = Dictionary(grouping: items) { $0.category }
         
         // 创建类别分析
-        var categoryBreakdown: [CategoryAnalysis] = []
+        var categoryBreakdown: [PackingCategoryAnalysis] = []
         
         for (category, categoryItems) in categorizedItems {
             let categoryWeight = categoryItems.reduce(0) { $0 + $1.weight }
@@ -631,7 +631,7 @@ class PackingOptimizer {
             let averageItemWeight = categoryWeight / Double(categoryItems.count)
             let averageItemVolume = categoryVolume / Double(categoryItems.count)
             
-            categoryBreakdown.append(CategoryAnalysis(
+            categoryBreakdown.append(PackingCategoryAnalysis(
                 category: category,
                 itemCount: categoryItems.count,
                 totalWeight: categoryWeight,

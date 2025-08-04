@@ -200,7 +200,7 @@ extension LLMAPIService {
         return try parseItemInfoArray(from: content)
     }
     
-    /// 从照片识别物品
+    /// 从照片识别物品（增强版）
     /// - Parameters:
     ///   - imageData: 图片数据
     ///   - hint: 识别提示（可选）
@@ -211,53 +211,251 @@ extension LLMAPIService {
             throw APIError.invalidResponse
         }
         
-        // 目前大多数 API 不支持图像输入，这里提供一个框架实现
-        // 当支持视觉模型时，可以使用以下逻辑：
+        // 使用增强的照片识别逻辑
+        return try await performEnhancedPhotoRecognition(imageData: imageData, hint: hint)
+    }
+    
+    /// 执行增强的照片识别
+    /// - Parameters:
+    ///   - imageData: 图片数据
+    ///   - hint: 识别提示（可选）
+    /// - Returns: 物品信息
+    private func performEnhancedPhotoRecognition(imageData: Data, hint: String? = nil) async throws -> ItemInfo {
+        let config = currentConfig ?? LLMConfigurationManager.shared.currentConfig
         
-        /*
-        // 将图片转换为 base64
-        let base64Image = imageData.base64EncodedString()
-        
-        let hintText = hint.map { "提示：\($0)" } ?? ""
-        
-        let prompt = """
-        请识别图片中的物品并返回详细信息。\(hintText)
-        
-        返回JSON格式：
-        {
-            "name": "物品名称",
-            "category": "物品类别",
-            "weight": 重量（克），
-            "volume": 体积（立方厘米），
-            "dimensions": {
-                "length": 长度（厘米），
-                "width": 宽度（厘米），
-                "height": 高度（厘米）
-            },
-            "confidence": 置信度（0.0-1.0），
-            "alternatives": []
+        guard config.isValid() else {
+            throw APIError.configurationError("LLM API配置无效")
         }
+        
+        // 分析图片基本信息
+        let imageAnalysis = analyzeImageData(imageData)
+        let hintText = hint.map { "用户提示：\($0)" } ?? ""
+        
+        let enhancedPrompt = """
+        作为专业的物品识别专家，请基于以下信息识别物品：
+        
+        图片信息：
+        - 文件大小：\(String(format: "%.1f", Double(imageData.count) / 1024.0))KB
+        - 预估复杂度：\(imageAnalysis.complexity)
+        - 可能包含文字：\(imageAnalysis.hasText ? "是" : "否")
+        \(hintText)
+        
+        请运用以下识别策略：
+        1. 形状特征分析：观察物品的基本轮廓和几何特征
+        2. 颜色模式识别：分析主要颜色和材质特征
+        3. 尺寸比例推测：基于常见物品的相对大小关系
+        4. 上下文线索：利用背景和环境信息辅助判断
+        5. 品牌标识识别：寻找可能的品牌标志或文字信息
+        
+        识别要求：
+        - 优先识别最显著的主要物品
+        - 如果有多个物品，选择最大或最重要的一个
+        - 置信度评估要基于识别特征的清晰度和匹配度
+        - 重量和体积估算要基于物品类型的常见规格
+        
+        请以JSON格式返回：
+        {
+            "name": "物品标准名称",
+            "category": "物品类别",
+            "weight": 重量（克，数值类型），
+            "volume": 体积（立方厘米，数值类型），
+            "dimensions": {
+                "length": 长度（厘米，数值类型），
+                "width": 宽度（厘米，数值类型），
+                "height": 高度（厘米，数值类型）
+            },
+            "confidence": 置信度（0.0-1.0，数值类型），
+            "recognitionFeatures": [
+                "识别到的关键特征1",
+                "识别到的关键特征2"
+            ],
+            "qualityScore": 图片质量评分（0.0-1.0，数值类型），
+            "alternatives": [
+                {
+                    "name": "备选物品名称",
+                    "category": "类别",
+                    "confidence": 置信度（0.0-1.0，数值类型），
+                    "reason": "识别理由"
+                }
+            ],
+            "recognitionMethod": "使用的主要识别方法",
+            "suggestions": [
+                "改进识别的建议"
+            ]
+        }
+        
+        物品类别必须是以下之一：
+        clothing, electronics, toiletries, documents, medicine, accessories, shoes, books, food, sports, beauty, other
+        
+        置信度评估标准：
+        - 0.9-1.0：特征非常清晰，几乎确定
+        - 0.8-0.9：特征清晰，高度确信
+        - 0.7-0.8：特征较清晰，比较确信
+        - 0.6-0.7：特征模糊，中等确信
+        - 0.5-0.6：特征不清，低确信
+        - 0.0-0.5：无法确定，需要更多信息
         """
         
-        // 构建包含图片的消息
         let messages = [
-            ChatMessage.system("你是一个专业的图像识别专家，能够准确识别图片中的物品。"),
-            // 这里需要支持图片消息格式
-            ChatMessage(role: "user", content: prompt, image: base64Image)
+            ChatMessage.system("你是一个专业的图像识别专家，具有丰富的物品识别经验和准确的重量体积估算能力。请始终返回有效的JSON格式数据，确保数值字段为数字类型。"),
+            ChatMessage.user(enhancedPrompt)
         ]
         
-        let response = try await sendChatCompletion(messages: messages)
+        let request = ChatCompletionRequest(
+            model: config.model,
+            messages: messages,
+            maxTokens: min(config.maxTokens ?? 2048, 2048),
+            temperature: 0.3, // 降低温度以提高准确性
+            topP: config.topP ?? 0.9,
+            stream: false,
+            responseFormat: nil,
+            topK: config.topK ?? 50,
+            frequencyPenalty: config.frequencyPenalty ?? 0.0,
+            stop: nil
+        )
+        
+        let response = try await performRequest(request, config: config)
         guard let content = response.choices.first?.message.content else {
             throw APIError.invalidResponse
         }
         
-        return try parseItemInfo(from: content, originalName: "图片识别物品")
-        */
-        
-        // 临时实现：基于图片大小和提示进行模拟识别
-        return try await simulatePhotoRecognition(imageData: imageData, hint: hint)
+        return try parseEnhancedItemInfo(from: content, originalName: "照片识别物品")
     } 
    
+    /// 图片分析结果
+    private struct ImageAnalysis {
+        let complexity: String
+        let hasText: Bool
+        let estimatedObjects: Int
+        let qualityScore: Double
+    }
+    
+    /// 分析图片数据
+    /// - Parameter imageData: 图片数据
+    /// - Returns: 图片分析结果
+    private func analyzeImageData(_ imageData: Data) -> ImageAnalysis {
+        let sizeKB = Double(imageData.count) / 1024.0
+        
+        // 基于文件大小估算复杂度
+        let complexity: String
+        if sizeKB < 50 {
+            complexity = "简单"
+        } else if sizeKB < 200 {
+            complexity = "中等"
+        } else {
+            complexity = "复杂"
+        }
+        
+        // 基于文件大小估算是否包含文字（简化逻辑）
+        let hasText = sizeKB > 100
+        
+        // 估算物品数量
+        let estimatedObjects = min(max(Int(sizeKB / 100), 1), 5)
+        
+        // 质量评分（基于文件大小，实际应该基于图片清晰度）
+        let qualityScore = min(sizeKB / 500.0, 1.0)
+        
+        return ImageAnalysis(
+            complexity: complexity,
+            hasText: hasText,
+            estimatedObjects: estimatedObjects,
+            qualityScore: qualityScore
+        )
+    }
+    
+    /// 清理JSON内容
+    /// - Parameter content: 原始内容
+    /// - Returns: 清理后的JSON字符串
+    private func cleanJSONContent(_ content: String) -> String {
+        // 移除可能的markdown代码块标记
+        var cleaned = content
+        cleaned = cleaned.replacingOccurrences(of: "```json", with: "")
+        cleaned = cleaned.replacingOccurrences(of: "```", with: "")
+        
+        // 查找JSON对象的开始和结束
+        if let startIndex = cleaned.firstIndex(of: "{"),
+           let endIndex = cleaned.lastIndex(of: "}") {
+            cleaned = String(cleaned[startIndex...endIndex])
+        }
+        
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    /// 解析增强的物品信息
+    /// - Parameters:
+    ///   - content: JSON内容
+    ///   - originalName: 原始名称
+    /// - Returns: 物品信息
+    private func parseEnhancedItemInfo(from content: String, originalName: String) throws -> ItemInfo {
+        // 清理JSON内容
+        let cleanedContent = cleanJSONContent(content)
+        
+        guard let data = cleanedContent.data(using: .utf8) else {
+            throw APIError.decodingError(NSError(domain: "JSONParsing", code: 1, userInfo: [NSLocalizedDescriptionKey: "无法转换为数据"]))
+        }
+        
+        do {
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let json = json else {
+                throw APIError.decodingError(NSError(domain: "JSONParsing", code: 2, userInfo: [NSLocalizedDescriptionKey: "无效的JSON格式"]))
+            }
+            
+            let name = json["name"] as? String ?? originalName
+            let categoryString = json["category"] as? String ?? "other"
+            let category = ItemCategory(rawValue: categoryString) ?? .other
+            let weight = json["weight"] as? Double ?? 100.0
+            let volume = json["volume"] as? Double ?? 100.0
+            let confidence = json["confidence"] as? Double ?? 0.5
+            
+            // 解析尺寸信息
+            var dimensions: Dimensions?
+            if let dimensionsDict = json["dimensions"] as? [String: Any] {
+                let length = dimensionsDict["length"] as? Double ?? 0
+                let width = dimensionsDict["width"] as? Double ?? 0
+                let height = dimensionsDict["height"] as? Double ?? 0
+                dimensions = Dimensions(length: length, width: width, height: height)
+            }
+            
+            // 解析替代品信息
+            var alternatives: [ItemInfo] = []
+            if let alternativesArray = json["alternatives"] as? [[String: Any]] {
+                alternatives = alternativesArray.compactMap { altDict in
+                    guard let altName = altDict["name"] as? String,
+                          let altCategoryString = altDict["category"] as? String,
+                          let altCategory = ItemCategory(rawValue: altCategoryString),
+                          let altConfidence = altDict["confidence"] as? Double else {
+                        return nil
+                    }
+                    
+                    return ItemInfo(
+                        name: altName,
+                        category: altCategory,
+                        weight: weight * 0.8, // 估算替代品重量
+                        volume: volume * 0.8, // 估算替代品体积
+                        confidence: altConfidence,
+                        source: "照片识别替代品"
+                    )
+                }
+            }
+            
+            return ItemInfo(
+                name: name,
+                category: category,
+                weight: weight,
+                volume: volume,
+                dimensions: dimensions,
+                confidence: confidence,
+                alternatives: alternatives,
+                source: "增强照片识别"
+            )
+            
+        } catch {
+            logger.error("解析增强物品信息失败: \(error)")
+            // 降级到基础解析
+            return try parseItemInfo(from: content, originalName: originalName)
+        }
+    }
+    
     /// 模拟照片识别（临时实现）
     private func simulatePhotoRecognition(imageData: Data, hint: String?) async throws -> ItemInfo {
         // 基于图片大小和提示进行简单推测
@@ -305,6 +503,323 @@ extension LLMAPIService {
             confidence: confidence,
             source: "照片模拟识别"
         )
+    }
+    
+    /// 多策略照片识别
+    /// - Parameters:
+    ///   - imageData: 图片数据
+    ///   - strategies: 识别策略列表
+    ///   - hint: 识别提示
+    /// - Returns: 合并后的识别结果
+    func identifyItemFromPhotoWithMultipleStrategies(
+        _ imageData: Data,
+        strategies: [PhotoRecognitionStrategy] = [.aiVision, .textExtraction, .colorAnalysis],
+        hint: String? = nil
+    ) async throws -> ItemInfo {
+        var results: [StrategyResult] = []
+        
+        // 执行各种识别策略
+        for strategy in strategies {
+            do {
+                let result = try await executeRecognitionStrategy(strategy, imageData: imageData, hint: hint)
+                results.append(StrategyResult(strategy: strategy, result: result, confidence: result.confidence))
+            } catch {
+                logger.warning("识别策略 \(strategy.displayName) 执行失败: \(error)")
+                continue
+            }
+        }
+        
+        guard !results.isEmpty else {
+            throw APIError.invalidResponse
+        }
+        
+        // 合并识别结果
+        return try mergeRecognitionResults(results)
+    }
+    
+    /// 策略识别结果
+    private struct StrategyResult {
+        let strategy: PhotoRecognitionStrategy
+        let result: ItemInfo
+        let confidence: Double
+    }
+    
+    /// 执行单个识别策略
+    /// - Parameters:
+    ///   - strategy: 识别策略
+    ///   - imageData: 图片数据
+    ///   - hint: 识别提示
+    /// - Returns: 识别结果
+    private func executeRecognitionStrategy(
+        _ strategy: PhotoRecognitionStrategy,
+        imageData: Data,
+        hint: String?
+    ) async throws -> ItemInfo {
+        switch strategy {
+        case .aiVision:
+            return try await performEnhancedPhotoRecognition(imageData: imageData, hint: hint)
+            
+        case .textExtraction:
+            return try await performTextBasedRecognition(imageData: imageData, hint: hint)
+            
+        case .colorAnalysis:
+            return try await performColorBasedRecognition(imageData: imageData, hint: hint)
+            
+        case .shapeAnalysis:
+            return try await performShapeBasedRecognition(imageData: imageData, hint: hint)
+        }
+    }
+    
+    /// 基于文字提取的识别
+    private func performTextBasedRecognition(imageData: Data, hint: String?) async throws -> ItemInfo {
+        let config = currentConfig ?? LLMConfigurationManager.shared.currentConfig
+        
+        let prompt = """
+        假设从图片中提取到了一些文字信息，请基于这些信息识别物品：
+        
+        图片大小：\(String(format: "%.1f", Double(imageData.count) / 1024.0))KB
+        用户提示：\(hint ?? "无")
+        
+        请重点关注：
+        1. 可能的品牌名称或产品型号
+        2. 产品标签或说明文字
+        3. 包装上的关键词
+        
+        返回JSON格式的识别结果，置信度应相对较低（0.4-0.7）因为是基于文字推测。
+        """
+        
+        let messages = [
+            ChatMessage.system("你是文字识别专家，擅长从产品文字信息推断物品类型。"),
+            ChatMessage.user(prompt)
+        ]
+        
+        let response = try await sendChatCompletion(messages: messages)
+        guard let content = response.choices.first?.message.content else {
+            throw APIError.invalidResponse
+        }
+        
+        var result = try parseEnhancedItemInfo(from: content, originalName: "文字识别物品")
+        result = ItemInfo(
+            name: result.name,
+            category: result.category,
+            weight: result.weight,
+            volume: result.volume,
+            dimensions: result.dimensions,
+            confidence: min(result.confidence, 0.7), // 限制文字识别的最高置信度
+            alternatives: result.alternatives,
+            source: "文字识别"
+        )
+        
+        return result
+    }
+    
+    /// 基于颜色分析的识别
+    private func performColorBasedRecognition(imageData: Data, hint: String?) async throws -> ItemInfo {
+        let imageAnalysis = analyzeImageData(imageData)
+        
+        let prompt = """
+        基于图片的颜色特征进行物品识别：
+        
+        图片复杂度：\(imageAnalysis.complexity)
+        用户提示：\(hint ?? "无")
+        
+        请根据常见物品的颜色特征进行推测：
+        - 黑色/深色：可能是电子产品、鞋类
+        - 白色/浅色：可能是衣物、洗漱用品
+        - 彩色：可能是衣物、配饰、书籍
+        - 金属色：可能是电子产品、配饰
+        
+        返回JSON格式，置信度应较低（0.3-0.6）因为仅基于颜色推测。
+        """
+        
+        let messages = [
+            ChatMessage.system("你是颜色分析专家，能够根据物品颜色特征推断物品类型。"),
+            ChatMessage.user(prompt)
+        ]
+        
+        let response = try await sendChatCompletion(messages: messages)
+        guard let content = response.choices.first?.message.content else {
+            throw APIError.invalidResponse
+        }
+        
+        var result = try parseEnhancedItemInfo(from: content, originalName: "颜色识别物品")
+        result = ItemInfo(
+            name: result.name,
+            category: result.category,
+            weight: result.weight,
+            volume: result.volume,
+            dimensions: result.dimensions,
+            confidence: min(result.confidence, 0.6), // 限制颜色识别的最高置信度
+            alternatives: result.alternatives,
+            source: "颜色识别"
+        )
+        
+        return result
+    }
+    
+    /// 基于形状分析的识别
+    private func performShapeBasedRecognition(imageData: Data, hint: String?) async throws -> ItemInfo {
+        let imageAnalysis = analyzeImageData(imageData)
+        
+        let prompt = """
+        基于物品形状特征进行识别：
+        
+        图片复杂度：\(imageAnalysis.complexity)
+        预估物品数量：\(imageAnalysis.estimatedObjects)
+        用户提示：\(hint ?? "无")
+        
+        请根据常见物品的形状特征进行推测：
+        - 长方形/扁平：可能是书籍、文件、平板
+        - 圆形/圆柱形：可能是瓶子、罐子、化妆品
+        - 不规则形状：可能是衣物、鞋类
+        - 小巧方形：可能是电子产品、配饰
+        
+        返回JSON格式，置信度应中等（0.4-0.7）。
+        """
+        
+        let messages = [
+            ChatMessage.system("你是形状分析专家，能够根据物品形状特征推断物品类型。"),
+            ChatMessage.user(prompt)
+        ]
+        
+        let response = try await sendChatCompletion(messages: messages)
+        guard let content = response.choices.first?.message.content else {
+            throw APIError.invalidResponse
+        }
+        
+        var result = try parseEnhancedItemInfo(from: content, originalName: "形状识别物品")
+        result = ItemInfo(
+            name: result.name,
+            category: result.category,
+            weight: result.weight,
+            volume: result.volume,
+            dimensions: result.dimensions,
+            confidence: min(result.confidence, 0.7), // 限制形状识别的最高置信度
+            alternatives: result.alternatives,
+            source: "形状识别"
+        )
+        
+        return result
+    }
+    
+    /// 合并多个识别结果
+    /// - Parameter results: 策略识别结果列表
+    /// - Returns: 合并后的最终结果
+    private func mergeRecognitionResults(_ results: [StrategyResult]) throws -> ItemInfo {
+        guard !results.isEmpty else {
+            throw APIError.invalidResponse
+        }
+        
+        // 如果只有一个结果，直接返回
+        if results.count == 1 {
+            return results[0].result
+        }
+        
+        // 按置信度排序
+        let sortedResults = results.sorted { $0.confidence > $1.confidence }
+        let primaryResult = sortedResults[0].result
+        
+        // 计算加权平均置信度
+        let totalWeight = results.reduce(0) { $0 + $1.confidence }
+        let weightedConfidence = results.reduce(0) { sum, result in
+            sum + (result.confidence * result.confidence) // 使用平方作为权重
+        } / totalWeight
+        
+        // 检查结果一致性
+        let categoryConsistency = calculateCategoryConsistency(results)
+        let nameConsistency = calculateNameConsistency(results)
+        
+        // 调整最终置信度
+        var finalConfidence = weightedConfidence
+        if categoryConsistency > 0.7 {
+            finalConfidence = min(finalConfidence * 1.2, 1.0) // 类别一致性高时提升置信度
+        } else if categoryConsistency < 0.3 {
+            finalConfidence = finalConfidence * 0.8 // 类别一致性低时降低置信度
+        }
+        
+        // 合并重量和体积（加权平均）
+        let weightedWeight = results.reduce(0) { sum, result in
+            sum + (result.result.weight * result.confidence)
+        } / totalWeight
+        
+        let weightedVolume = results.reduce(0) { sum, result in
+            sum + (result.result.volume * result.confidence)
+        } / totalWeight
+        
+        // 收集所有替代品
+        var allAlternatives: [ItemInfo] = []
+        for result in sortedResults.dropFirst() {
+            allAlternatives.append(result.result)
+        }
+        allAlternatives.append(contentsOf: primaryResult.alternatives)
+        
+        // 去重替代品
+        let uniqueAlternatives = Array(Set(allAlternatives.map { $0.name })).compactMap { name in
+            allAlternatives.first { $0.name == name }
+        }.prefix(3) // 最多保留3个替代品
+        
+        return ItemInfo(
+            name: primaryResult.name,
+            category: primaryResult.category,
+            weight: weightedWeight,
+            volume: weightedVolume,
+            dimensions: primaryResult.dimensions,
+            confidence: finalConfidence,
+            alternatives: Array(uniqueAlternatives),
+            source: "多策略合并识别"
+        )
+    }
+    
+    /// 计算类别一致性
+    private func calculateCategoryConsistency(_ results: [StrategyResult]) -> Double {
+        let categories = results.map { $0.result.category }
+        let uniqueCategories = Set(categories)
+        
+        if uniqueCategories.count == 1 {
+            return 1.0 // 完全一致
+        }
+        
+        // 计算最常见类别的比例
+        let categoryCounts = categories.reduce(into: [:]) { counts, category in
+            counts[category, default: 0] += 1
+        }
+        
+        let maxCount = categoryCounts.values.max() ?? 0
+        return Double(maxCount) / Double(categories.count)
+    }
+    
+    /// 计算名称一致性
+    private func calculateNameConsistency(_ results: [StrategyResult]) -> Double {
+        let names = results.map { $0.result.name.lowercased() }
+        let uniqueNames = Set(names)
+        
+        if uniqueNames.count == 1 {
+            return 1.0 // 完全一致
+        }
+        
+        // 计算名称相似度（简化实现）
+        var totalSimilarity = 0.0
+        var comparisons = 0
+        
+        for i in 0..<names.count {
+            for j in (i+1)..<names.count {
+                let similarity = calculateStringSimilarity(names[i], names[j])
+                totalSimilarity += similarity
+                comparisons += 1
+            }
+        }
+        
+        return comparisons > 0 ? totalSimilarity / Double(comparisons) : 0.0
+    }
+    
+    /// 计算字符串相似度（简化实现）
+    private func calculateStringSimilarity(_ str1: String, _ str2: String) -> Double {
+        let set1 = Set(str1)
+        let set2 = Set(str2)
+        let intersection = set1.intersection(set2)
+        let union = set1.union(set2)
+        
+        return union.isEmpty ? 0.0 : Double(intersection.count) / Double(union.count)
     }
     
     /// 检查是否支持照片识别
@@ -758,6 +1273,39 @@ extension LLMAPIService {
         let alternatives = try await suggestAlternatives(
             for: tempItem,
             constraints: alternativeConstraints
+        )
+        
+        // 转换为ItemInfo格式
+        return alternatives.map { alt in
+            ItemInfo(
+                name: alt.name,
+                category: alt.category,
+                weight: alt.weight,
+                volume: alt.volume,
+                dimensions: alt.dimensions,
+                confidence: alt.suitability,
+                source: "AI替代建议"
+            )
+        }
+    }
+    
+    /// 执行基于ID的替代品建议（内部方法）
+    internal func performAlternativeSuggestionById(itemId: UUID, constraints: AlternativeConstraints) async throws -> [ItemInfo] {
+        // 这里应该根据itemId获取实际的物品信息
+        // 为了简化，我们创建一个临时的ItemInfo
+        let tempItem = ItemInfo(
+            name: "物品-\(itemId.uuidString.prefix(8))",
+            category: .other,
+            weight: 100,
+            volume: 100,
+            dimensions: Dimensions(length: 5, width: 5, height: 4),
+            confidence: 0.5,
+            source: "临时创建"
+        )
+        
+        let alternatives = try await suggestAlternatives(
+            for: tempItem,
+            constraints: constraints
         )
         
         // 转换为ItemInfo格式

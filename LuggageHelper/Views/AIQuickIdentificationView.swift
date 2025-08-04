@@ -175,44 +175,7 @@ struct AIQuickIdentificationView: View {
     }
 }
 
-/// 相机视图
-struct CameraView: UIViewControllerRepresentable {
-    @Binding var image: UIImage?
-    var onImageCaptured: () -> Void
-    
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.delegate = context.coordinator
-        picker.sourceType = .camera
-        return picker
-    }
-    
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
-        let parent: CameraView
-        
-        init(_ parent: CameraView) {
-            self.parent = parent
-        }
-        
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let image = info[.originalImage] as? UIImage {
-                parent.image = image
-                parent.onImageCaptured()
-            }
-            picker.dismiss(animated: true)
-        }
-        
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            picker.dismiss(animated: true)
-        }
-    }
-}
+// CameraView 现在在 AIPhotoIdentificationView.swift 中定义
 
 /// AI 快速识别弹窗
 /// 提供弹窗形式的快速识别界面

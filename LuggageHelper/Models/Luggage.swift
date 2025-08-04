@@ -36,6 +36,22 @@ struct Luggage: Identifiable, Codable, Equatable, LuggageProtocol {
         return luggageType == .carryOn ? airline.carryOnWeightLimit : airline.checkedBaggageWeightLimit
     }
     
+    /// 最大重量限制（用于离线识别服务）
+    var maxWeight: Double? {
+        // 默认重量限制，可以根据行李箱类型设置
+        switch luggageType {
+        case .carryOn:
+            return 7.0 // 7kg 手提行李
+        case .checked:
+            return 23.0 // 23kg 托运行李
+        }
+    }
+    
+    /// 行李箱类型（用于序列化）
+    var type: LuggageType {
+        return luggageType
+    }
+    
     /// 初始化方法
     init(id: UUID = UUID(), name: String, capacity: Double, emptyWeight: Double, imagePath: String? = nil, items: [LuggageItem] = [], note: String? = nil, luggageType: LuggageType = .checked, selectedAirlineId: UUID? = nil) {
         self.id = id
